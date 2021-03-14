@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import os
-import pickle
+# import pickle
+import dill
 import pandas as pd
 import numpy as np
 
@@ -53,7 +54,8 @@ def save_output(obj, path, symlink=True):
         np.save(save_path, obj)
     else:
         with open(save_path, "wb") as f:
-            pickle.dump(obj, f)
+            dill.dump(obj, f)
+            # pickle.dump(obj, f)
 
     rel_save_path = save_path.relative_to(orig_cwd)
     rel_orig_path = orig_path.relative_to(orig_cwd)
