@@ -1,0 +1,18 @@
+# @package _global_
+
+defaults:
+  - target: supermag
+  - features: solar_wind
+
+test_size: .2
+
+lagged_features:
+  lag: "H"
+  exog_lag: "H"
+  lead: "H"
+
+output:
+  train_features: "data/processed/train_features.pkl"
+  train_target: "data/processed/train_target.pkl"
+  test_features: "data/processed/test_features.pkl"
+  test_target: "data/processed/test_target.pkl"

@@ -1,0 +1,28 @@
+# @package _name_
+
+loading:
+  path: data/raw/solar_wind.csv
+  time_col: "times"
+  features:
+    - "b"
+    - "bx"
+    - "by"
+    - "bz"
+    - "vx_gse"
+    - "vy_gse"
+    - "vz_gse"
+    - "density"
+    - "temperature"
+    - "pressure"
+    - "e"
+    - "beta"
+    - "alfven_mach"
+    - "mach"
+
+pipeline:
+  interpolate: True
+  resample_freq: 'T'
+  resample_func: "mean"
+  scaler: null
+
+output_path: data/processed/solar_wind.pkl

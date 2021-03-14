@@ -1,0 +1,41 @@
+# local package
+-e .
+
+# external requirements
+flake8                          # For formatting code
+python-dotenv>=0.5.1
+
+###############################################################################
+#                            Daniel's requirements                            #
+###############################################################################
+
+ipython>=7.19.0
+yapf
+jedi <0.18.0
+python-language-server[all]
+
+###############################################################################
+#                             Project requirements                            #
+###############################################################################
+
+hydra-core>=1.0
+
+# Needed to get rid of error in hydra
+omegaconf>=2.1.0dev21
+
+# Data processing
+numpy
+pandas
+scikit-learn
+statsmodels
+
+# Logging
+loguru
+tqdm
+
+# Gradient boosting
+xgboost
+lightgbm
+
+# Misc
+dill

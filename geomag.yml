@@ -1,0 +1,23 @@
+name: geomag
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python==3.8.5
+  - ipython>=7.19.0
+  - flake8
+  - yapf
+  - mypy
+  - jedi <0.18.0
+  - pip
+  - numpy
+  - pandas
+  - scikit-learn
+  - statsmodels
+  - loguru
+  - tqdm
+  - xgboost
+  - lightgbm
+
+  - pip:
+    - -r file:requirements.txt
