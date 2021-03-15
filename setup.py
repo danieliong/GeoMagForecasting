@@ -4,7 +4,7 @@ setup(
     name='src',
     packages=find_packages(),
     version='0.1.0',
-    description='ML models for predicting magnetic perturbations of local magnetometer stations',
+    description='Module to help process and build models for geomagnetic indices data',
     author='Daniel Iong',
     license='',
 )

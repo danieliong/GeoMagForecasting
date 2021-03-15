@@ -1,10 +1,18 @@
 # @package _global_
 
 defaults:
+  - hydra: default
   - target: supermag
   - features: solar_wind
 
-test_size: .2
+symlink: false
+
+time:
+  start: 2010-01-01
+  end: 2019-12-31
+
+split:
+  test_size: .2
 
 lagged_features:
   lag: "H"
@@ -12,7 +20,9 @@ lagged_features:
   lead: "H"
 
 output:
-  train_features: "data/processed/train_features.pkl"
-  train_target: "data/processed/train_target.pkl"
-  test_features: "data/processed/test_features.pkl"
-  test_target: "data/processed/test_target.pkl"
+  features_pipeline: "features_pipeline.pkl"
+  target_pipeline: "target_pipeline.pkl"
+  train_features: "train_features.npy"
+  train_target: "train_target.npy"
+  test_features: "test_features.npy"
+  test_target: "test_target.npy"

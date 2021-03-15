@@ -8,6 +8,8 @@ from omegaconf import OmegaConf
 
 
 def load_solar_wind(path,
+                    start="2010-01-01",
+                    end="2019-12-31",
                     features=None,
                     time_col="times",
                     working_dir=None,
@@ -54,11 +56,17 @@ def load_solar_wind(path,
                        usecols=usecols,
                        **kwargs)
 
+    # Subset times [start, end)
+    # NOTE: Not sure if this works if target and features don't have same freq
+    data = data.truncate(before=start, after=end)[:-1]
+
     return data
 
 
 def load_supermag(station,
-                  years,
+                  start="2010-01-01",
+                  end="2019-12-31",
+                  horizontal=True,
                   data_dir="data/raw",
                   working_dir=None,
                   **read_kwargs):
@@ -87,6 +95,9 @@ def load_supermag(station,
     if working_dir is not None:
         data_dir = os.path.join(working_dir, data_dir)
 
+    daterange = pd.date_range(start=start, end=end, freq="Y")
+    years = list(daterange.year)
+
     # Create mapper for data
     def _read_csv_oneyear(year):
         return pd.read_csv(f"{data_dir}/{year}/{station}.csv.gz",
@@ -101,4 +112,10 @@ def load_supermag(station,
     data.index = pd.DatetimeIndex(data['Date_UTC'])
     data.drop(columns=['Date_UTC'], inplace=True)
 
-    return data
+    data = data.loc[start:end]
+
+    if horizontal:
+        data.eval("db_h = ((dbn_nez**2)+(dbe_nez**2))**(1/2)", inplace=True)
+        return data['db_h']
+    else:
+        return data

@@ -3,34 +3,52 @@
 import hydra
 import pandas as pd
 import numpy as np
+import logging
 
 from collections import namedtuple
 from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
+from pandas.tseries.frequencies import to_offset
 from sklearn.model_selection import TimeSeriesSplit
-from loguru import logger
+from sklearn.base import clone
+# from loguru import logger
 
 # TODO: Find better way to do this
-try:
-    from utils import is_pandas, is_numpy, save_output
-    from preprocessing.loading import load_solar_wind, load_supermag
-    from preprocessing.processors import create_pipeline
-except ImportError:
-    from src.utils import is_pandas, is_numpy, save_output
-    from src.processing.loading import load_solar_wind, load_supermag
-    from src.preprocessing.processors import create_pipeline
+# try:
+#     from utils import is_pandas, is_numpy, save_output
+#     from preprocessing.loading import load_solar_wind, load_supermag
+#     from preprocessing.processors import create_pipeline
+# except ImportError:
+from src.utils import is_pandas, is_numpy, save_output
+from src.preprocessing.loading import load_solar_wind, load_supermag
+from src.preprocessing.processors import create_pipeline, LaggedFeaturesProcessor
+
+LOAD_PARAMS_NAME = "loading"
+
+logger = logging.getLogger(__name__)
 
 
-def load_data(cfg):
+def load_data(cfg, start, end):
+    def _get_kwargs(name):
+
+        kwargs = OmegaConf.select(cfg, f"{name}.{LOAD_PARAMS_NAME}")
+        kwargs = OmegaConf.to_container(kwargs)
+        kwargs['start'] = start
+        kwargs['end'] = end
+
+        return kwargs
+
     original_cwd = get_original_cwd()
 
     if 'solar_wind' in cfg:
         features_df = load_solar_wind(working_dir=original_cwd,
-                                      **cfg.solar_wind.loading)
+                                      **_get_kwargs("solar_wind"))
 
-    if 'supermag' in cfg:
+    # assert len(cfg.target) == 1, "More than one target is specified."
+
+    if cfg.target.name == "supermag":
         target_df = load_supermag(working_dir=original_cwd,
-                                  **cfg.supermag.loading)
+                                  **_get_kwargs("target"))
 
     return features_df, target_df
 
@@ -47,22 +65,33 @@ def get_train_val_split(y, method, val_size, **kwargs):
 
 
 def split_data(X, y, cfg):
+    # QUESTION: Should I use lead time in splitting?
 
-    # params = OmegaConf.select(cfg, "split").to_container()
-    params_dict = OmegaConf.to_container(cfg)
+    params = OmegaConf.select(cfg, "split")
 
-    # Defaults to .2 if none specified
-    test_size = params_dict.pop('test_size', .2)
+    if OmegaConf.is_none(params.test_size):
+        logger.debug(
+            "Test size not provided in configs. It will be set to .2.")
+        test_size = .2
+    else:
+        test_size = params.test_size
 
-    test_start = round(y.shape[0] * (1 - test_size))
+    test_start_idx = round(y.shape[0] * (1 - test_size))
+    test_start = y.index[test_start_idx]
+    one_sec = to_offset('S')
 
     def _split(x):
         if is_pandas(x):
-            x_train, x_test = x.iloc[:test_start], x[test_start:]
-        elif is_numpy(x):
-            x_train, x_test = x[:test_start], x[test_start:]
+            x_train, x_test = x.loc[:test_start], x.loc[test_start:]
+
+            # HACK: Remove overlaps if there are any
+            overlap = x_train.index.intersection(x_test.index)
+            x_test.drop(index=overlap, inplace=True)
         else:
-            raise TypeError("x must be either a pd.DataFrame or np.ndarray.")
+            raise TypeError("x must be a pandas DataFrame or series.")
+
+        # FIXME: Data is split before processed so it looks like there is time
+        # overlap if times are resampled
 
         return x_train, x_test
 
@@ -75,9 +104,22 @@ def split_data(X, y, cfg):
     return Train(X_train, y_train), Test(X_test, y_test)
 
 
-def compute_lagged_features(X, y, cfg):
-    # TODO
-    pass
+# QUESTION: Should I compute lagged features here?
+# QUESTION: Pass in clone of feature processor for transformer_y?
+def compute_lagged_features(X, y, cfg, transformer_y=None, processor=None):
+
+    kwargs = cfg.lagged_features
+
+    if processor is None:
+        # Transform lagged y same way as other solar wind features
+        processor = LaggedFeaturesProcessor(transformer_y=transformer_y,
+                                            **kwargs)
+        processor.fit(X, y)
+
+    # NOTE: fitted transformer is an attribute in processor
+    X_lagged, y_target = processor.transform(X, y)
+
+    return X_lagged, y_target, processor
 
 
 @hydra.main(config_path="../configs/preprocessing", config_name="config")
@@ -87,37 +129,63 @@ def main(cfg: DictConfig) -> None:
     """
 
     logger.info("Loading data...")
-    features_df, target_df = load_data(cfg)
+    features_df, target_df = load_data(cfg,
+                                       start=cfg.time.start,
+                                       end=cfg.time.end)
 
     logger.info("Splitting data...")
     train, test = split_data(features_df, target_df, cfg)
+    # NOTE: train, test are namedtuples with attributes X, y
 
-    logger.info("Making features pipeline...")
+    logger.info("Transforming features...")
     features_pipeline = create_pipeline(**cfg.solar_wind.pipeline)
 
-    logger.info("Transforming train features...")
     X_train = features_pipeline.fit_transform(train.X)
-    logger.info("Transforming test features...")
     X_test = features_pipeline.transform(test.X)
 
-    logger.info("Making target pipeline...")
+    logger.info("Transforming target...")
     target_pipeline = create_pipeline(**cfg.target.pipeline)
 
-    logger.info("Transforming train target...")
-    X_train = target_pipeline.fit_transform(train.X)
-    logger.info("Transforming test target...")
-    X_test = target_pipeline.transform(test.X)
+    y_train = target_pipeline.fit_transform(train.y)
+    y_test = target_pipeline.transform(test.y)
 
+    # HACK: Delete overlap in y times.
+    # Overlap occurs when we resample.
+    y_overlap_idx = y_train.index.intersection(y_test.index)
+    n_overlap = len(y_overlap_idx)
+    if n_overlap > 0:
+        logger.debug(f"Dropping {n_overlap} overlap(s) in target times "
+                     + "between train and test.")
+        y_test.drop(index=y_overlap_idx, inplace=True)
 
+    logger.info("Computing lagged features...")
 
-    # TODO: Figure out Hydra logging
-    # TODO: Transform train and test target
+    # HACK: Passing in clone of features_pipeline might be problem if
+    # Resampler is in the pipeline. Fortunately, Resampler doesn't do anything if
+    # freq is < data's freq. Find a better way to handle this.
+    # IDEA: Remove Resampler?
+    train_features, train_target, processor = compute_lagged_features(
+        X_train, y_train, cfg, transformer_y=clone(features_pipeline))
 
+    # NOTE: Passing in processor here because it contains a transformer that
+    # should only be fitted with training data
+    # FIXME: Iterator too short error
+    test_features, test_target, _ = compute_lagged_features(
+        X_test, y_test, cfg, processor=processor)
 
-    # Save outputs
     logger.info("Saving outputs...")
-    save_output(X_train, cfg.output.train_features, symlink=True)
-    save_output(X_test, cfg.output.test_features, symlink=True)
+    # FIXME: symlink needs to be changed to dir name since cfg.outline contains
+    # relative paths now.
+    save_output(features_pipeline,
+                cfg.output.features_pipeline,
+                symlink=cfg.symlink)
+    save_output(target_pipeline,
+                cfg.output.target_pipeline,
+                symlink=cfg.symlink)
+    save_output(train_features, cfg.output.train_features, symlink=cfg.symlink)
+    save_output(test_features, cfg.output.test_features, symlink=cfg.symlink)
+    save_output(train_target, cfg.output.train_target, symlink=cfg.symlink)
+    save_output(test_target, cfg.output.test_target, symlink=cfg.symlink)
 
 
 if __name__ == '__main__':

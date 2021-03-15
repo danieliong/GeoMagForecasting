@@ -1,15 +1,18 @@
 import itertools
-import warnings
 import pandas as pd
 import numpy as np
+import logging
 
-from loguru import logger
+# from loguru import logger
+from functools import partial
 from pandas.tseries.frequencies import to_offset
 from importlib import import_module
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.utils.validation import check_is_fitted
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer
 
+logger = logging.getLogger(__name__)
 
 class Resampler(TransformerMixin):
     def __init__(self, freq="T", label="right", func="max", verbose=True,
@@ -54,7 +57,9 @@ class Resampler(TransformerMixin):
         X_freq = self._get_freq(X)
         assert X_freq == self.X_freq_, "X does not have the correct frequency."
 
-        if self.freq > X_freq or X_freq is None:
+        if X_freq is None:
+            X = X.resample(self.freq, label=self.label, **self.kwargs).apply(self.func)
+        elif self.freq > X_freq:
             X = X.resample(self.freq, label=self.label, **self.kwargs).apply(self.func)
         else:
             if self.verbose:
@@ -68,7 +73,7 @@ class Resampler(TransformerMixin):
 class Interpolator(TransformerMixin):
     def __init__(self,
                  method="linear",
-                 axis=1,
+                 axis=0,
                  limit_direction="both",
                  limit=15,
                  **kwargs):
@@ -95,84 +100,52 @@ class Interpolator(TransformerMixin):
         return X
 
 
-class PandasTransformer(TransformerMixin):
-    def __init__(self,
-                 transformer: str = 'StandardScaler',
-                 module: str = 'sklearn.preprocessing',
-                 **transformer_params):
-        """Scikit-learn transformer for transforming Pandas DataFrames
-
-
-        Parameters
-        ----------
-        transformer : str, default="StandardScaler"
-            Name of scikit-learn transformer class
-        module : str, default="sklearn.preprocessing"
-            Name of scikit-learn module that transformer belongs to
-        transformer_params : Keyword arguments for transformer
-
-        Note: Arguments are strings instead of functions so we can easily pickle
-              them.
-
-        """
-
-        # NOTE: Could've just used dill. Maybe think about reverting it to take
-        # in actual transformer objects?
-
+class PandasTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, transformer=None, **transformer_params):
         self.transformer = transformer
-        self.module = module
         self.transformer_params = transformer_params
 
-    def get_transformer_(self, vars=None):
-        # Get transformer object
 
-        module_ = import_module(self.module)
-        transf_call = getattr(module_, self.transformer)
-        transformer_ = transf_call(**self.transformer_params)
+    def fit(self, X, y=None, **fit_params):
 
-        if vars is not None:
-            for param, value in vars.items():
-                setattr(transformer_, param, value)
-
-        return transformer_
-
-    def fit(self, X, y=None):
+        self.type_ = type(X)
 
         if isinstance(X, pd.DataFrame):
             self.columns_ = X.columns
+        elif isinstance(X, pd.Series):
+            self.name_ = X.name
+        else:
+            logger.warning("X is not a pandas object.")
 
-        # Get transformer object
-        transformer_ = self.get_transformer_(vars=None)
-        transformer_.fit(X)
-
-        self.transformer_vars_ = vars(transformer_)
-
-        # Add transformer attributes to self
-        for param, value in self.transformer_vars_.items():
-            setattr(self, param, value)
+        self.transformer.fit(X, **fit_params)
 
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+    def transform(self, X):
         check_is_fitted(self)
 
-        transformer_ = self.get_transformer_(vars=self.transformer_vars_)
+        assert isinstance(X, self.type_), msg
 
         if isinstance(X, pd.Series):
-            X_ = transformer_.transform(X.to_numpy().reshape(-1, 1))
-            X_pd = pd.Series(X_, index=X.index)
+            assert X.name == self.name_
+            X_ = self.transformer.transform(X.to_numpy().reshape(-1, 1))
+            X_pd = pd.Series(X_.flatten(), name=self.name_, index=X.index)
         elif isinstance(X, pd.DataFrame):
-            X_ = transformer_.transform(X)
+            assert X.columns == self.columns_
+            X_ = self.transformer.transform(X)
             X_pd = pd.DataFrame(X_, columns=self.columns_, index=X.index)
 
         return X_pd
 
 
-class LaggedFeaturesProcessor(BaseEstimator):
+class LaggedFeaturesProcessor(BaseEstimator, TransformerMixin):
     """
     (Not exactly a sklearn transformer)
-    # NOTE: X, y don't necessarily have the same freq so we can't just pass one
+    NOTE: X, y don't necessarily have the same freq so we can't just pass one
     combined dataframe.
+
+    HACK: Not a proper scikit learn transformer. fit and transform take X and y.
+
     """
     def __init__(self,
                  lag="0T",
@@ -180,16 +153,18 @@ class LaggedFeaturesProcessor(BaseEstimator):
                  lead="0T",
                  transformer_y=None,
                  njobs=1,
-                 verbose=False):
+                 verbose=False,
+                 **transformer_y_kwargs):
         self.lag = lag
         self.exog_lag = exog_lag
         self.lead = lead
         self.njobs = njobs
         self.verbose = verbose
 
-        # NOTE: Must keep input as pd DataFrame
+        # NOTE: transformer_y must keep input as pd DataFrame
         # (use PandasTransformer if required)
         self.transformer_y = transformer_y
+        self.transformer_y_kwargs = transformer_y_kwargs
 
     def _compute_feature(self, target_time, X, y):
         """Computes ARX features to predict target at a specified time
@@ -216,10 +191,9 @@ class LaggedFeaturesProcessor(BaseEstimator):
         """
 
         # Get start and end times
-        end_time = target_time - self.lead
-        start = (end_time - self.lag)
-        start_exog = (end_time - self.exog_lag)
-        end = end_time - to_offset('S')
+        end = target_time - self.lead
+        start = (end - self.lag)
+        start_exog = (end - self.exog_lag)
 
         # Ravel target and solar wind between start and end time
         lagged = np.ravel(y[start:end].to_numpy())
@@ -230,7 +204,6 @@ class LaggedFeaturesProcessor(BaseEstimator):
 
 
     def fit(self, X, y):
-
         self.lag = to_offset(self.lag)
         self.exog_lag = to_offset(self.exog_lag)
         self.lead = to_offset(self.lead)
@@ -246,31 +219,33 @@ class LaggedFeaturesProcessor(BaseEstimator):
         n_exog = int((self.exog_lag / self.freq_X_) * X.shape[1])
         self.n_cols_ = n_lag + n_exog
 
-        self.pipeline_y_ = Pipeline(
-            [
-                ("resampler", Resampler(freq=self.y_freq_))
-                ("interpolator", Interpolator()),
+        pipeline_list = [("resampler", Resampler(freq=self.freq_y_)),
+                         ("interpolator", Interpolator())]
 
-            ]
-        )
+        if self.transformer_y is not None:
+            # NOTE: Pass in clone of feature pipeline for transformer_y
+            # transformer_y = _get_callable(self.transformer_y)
+            pipeline_list.append(
+                ("transformer", self.transformer_y))
 
-        # Transform y
-        # Fit transformer_y
-        self.transformer_y.fit(y)
+        self.pipeline_y_ = Pipeline(pipeline_list)
+        self.pipeline_y_.fit(y)
 
         return self
 
 
     def transform(self, X, y):
         # TODO: Check if freqs is same as in fit
-
+        # TODO: Write tests
         # NOTE: Include interpolator in transformer_y if want to interpolate
 
 
-        y = self.transformer_y.transform(y)
+        if self.transformer_y is not None:
+            y = self.transformer_y.transform(y)
 
-        max_lag = max(to_offset(self.lag), to_offset(self.exog_lag))
-        cutoff = X.index[0] + max_lag + self.lead
+        max_time = max(to_offset(self.lag) + y.index[0],
+                       to_offset(self.exog_lag) + X.index[0])
+        cutoff = max_time + self.lead
         target_times = y.index[y.index > cutoff]
         n_obs = len(target_times)
 
@@ -284,20 +259,26 @@ class LaggedFeaturesProcessor(BaseEstimator):
                                dtype=np.float32,
                                count=n_obs * self.n_cols_).reshape(n_obs, self.n_cols_)
 
-        return features
+        return features, y.loc[target_times]
 
+
+def _get_callable(obj_str):
+    # TODO: Modify to allow scaler_str to be more general
+    # TODO: Validation
+
+    obj = eval(obj_str)
+
+    return obj
 
 
 def create_pipeline(
         interpolate=True,
         resample_func="mean",
         resample_freq="T",
-        log=False,
         scaler=None,
-        module="sklearn.preprocessing",
+        func=None,
         **kwargs
 ):
-
     # TODO: Allow user to specify a function that gets put either in front or
     # last in pipeline
 
@@ -308,19 +289,21 @@ def create_pipeline(
     pipeline_list.append(
         ("resampler", Resampler(freq=resample_freq, func=resample_func)))
 
-    # TODO: Add log option
-
-    # if log:
-    #     log_transformer = PandasTransformer(transformer="FunctionTransformer",
-    #                                         func=)
-
     if interpolate:
         pipeline_list.append(("interpolator", Interpolator()))
 
-    if scaler is not None:
+    # NOTE: scaler ignored when func is specified
+    if func is not None:
+        func = _get_callable(func)
+        func_transformer = FunctionTransformer(func=func, **kwargs)
         pipeline_list.append(
-            ("transformer", PandasTransformer(transformer=scaler,
-                                              module=module)))
+            ("func", PandasTransformer(transformer=func_transformer)))
+    elif scaler is not None:
+        scaler_callable = _get_callable(scaler)
+        pipeline_list.append(
+            ("scaler", PandasTransformer(transformer=scaler_callable(), **kwargs)))
+    else:
+        logger.debug("scaler or func was not specified.")
 
     pipeline = Pipeline(pipeline_list)
 

@@ -1,5 +1,7 @@
 # @package _name_
 
+name: solar_wind
+
 loading:
   path: data/raw/solar_wind.csv
   time_col: "times"
