@@ -13,19 +13,14 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.base import clone
 # from loguru import logger
 
-# TODO: Find better way to do this
-# try:
-#     from utils import is_pandas, is_numpy, save_output
-#     from preprocessing.loading import load_solar_wind, load_supermag
-#     from preprocessing.processors import create_pipeline
-# except ImportError:
+# NOTE: Had to install src as package first
 from src.utils import is_pandas, is_numpy, save_output
 from src.preprocessing.loading import load_solar_wind, load_supermag
 from src.preprocessing.processors import create_pipeline, LaggedFeaturesProcessor
 
-LOAD_PARAMS_NAME = "loading"
-
 logger = logging.getLogger(__name__)
+
+LOAD_PARAMS_NAME = "loading"
 
 
 def load_data(cfg, start, end):
@@ -51,17 +46,6 @@ def load_data(cfg, start, end):
                                   **_get_kwargs("target"))
 
     return features_df, target_df
-
-
-# TODO: Move this to model training part
-def get_train_val_split(y, method, val_size, **kwargs):
-
-    if method == "timeseries":
-        splitter = TimeSeriesSplit(**kwargs)
-
-    split = splitter.split(y)
-
-    return split
 
 
 def split_data(X, y, cfg):

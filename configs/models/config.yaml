@@ -1,0 +1,36 @@
+# @package _global_
+
+defaults:
+  - hydra/sweeper: nevergrad
+  - model: xgboost
+
+hydra:
+  sweep:
+    dir: multirun/${model}/${hydra.job.overrride_dirname}/${now:%Y-%m-%d}
+  job:
+    config:
+      override_dirname:
+        kv_sep: '-'
+        item_sep: "_"
+        # TODO
+        exclude_keys = []
+
+
+
+inputs:
+  dir: outputs/2021-03-15/process_data/time.end-2011-01-01
+  features_pipeline: "features_pipeline.pkl"
+  target_pipeline: "target_pipeline.pkl"
+  train_features: "train_features.npy"
+  train_target: "train_target.npy"
+  test_features: "test_features.npy"
+  test_target: "test_target.npy"
+
+
+split:
+  # Use sklearn's TimeSeriesSplit
+  method: "timeseries"
+  n_splits: 5
+  # test_size: .2 # Needs to be int here
+
+metric: "rmse"
