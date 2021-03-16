@@ -102,10 +102,28 @@ def compute_metric(y, ypred, cfg):
     # QUESTION: Should we inverse transform y and ypred before
     # computing metrics?
 
+    inverse_transform = OmegaConf.select(cfg, "inverse_transform")
+
     metric = OmegaConf.select(cfg, "metric")
     if metric is None:
         # Default to rmse
         metric = "rmse"
+
+    if inverse_transform:
+
+        # This is needed because PandasTransformer requires ypred to be
+        # same type and have same name as y
+        if isinstance(ypred, np.ndarray):
+            # NOTE: This should be okay but check to make sure later.
+            if isinstance(y, pd.DataFrame):
+                ypred = pd.DataFrame(ypred, columns=y.columns, index=y.index)
+            elif isinstance(y, pd.Series):
+                ypred = pd.Series(ypred, name=y.name, index=y.index)
+
+        logger.debug("Inverse transforming y and predictions...")
+        target_pipeline = load_inputs("target_pipeline", cfg, type="processor")
+        y = target_pipeline.inverse_transform(y)
+        ypred = target_pipeline.inverse_transform(ypred)
 
     logger.debug(f"Computing {metric}...")
 
@@ -113,7 +131,6 @@ def compute_metric(y, ypred, cfg):
         metric_val = mean_squared_error(y, ypred, squared=False)
     elif metric == "mse":
         metric_val = mean_squared_error(y, ypred, squared=True)
-
 
     return float(metric_val)
 
@@ -127,10 +144,10 @@ def main(cfg):
     logger.info("Loading training data and computing lagged features...")
     X_train, y_train, processor = compute_lagged_features(cfg, train=True)
 
-    logger.debug("Getting CV split...")
+    logger.info("Getting CV split...")
     cv = get_cv(y_train, cfg)
 
-    logger.debug(f"Fitting model {model_name}...")
+    logger.info(f"Fitting model {model_name}...")
     model = get_model(model_name, cfg)
     model.fit(X_train, y_train, cv=cv)
 
@@ -141,7 +158,7 @@ def main(cfg):
     X_test, y_test, _ = compute_lagged_features(
         cfg, train=False, processor=processor)
 
-    logger.debug(f"Computing predictions...")
+    logger.info("Computing predictions...")
     ypred = model.predict(X_test)
     metric_val = compute_metric(y_test, ypred, cfg)
 

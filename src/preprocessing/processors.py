@@ -69,6 +69,9 @@ class Resampler(TransformerMixin):
 
         return X
 
+    def inverse_transform(self, X):
+        return X
+
 
 class Interpolator(TransformerMixin):
     def __init__(self,
@@ -99,6 +102,12 @@ class Interpolator(TransformerMixin):
 
         return X
 
+    # NOTE: This is for inverse transforming the pipeline when computing metrics later.
+    # The only thing that needs to be inversed is the scaler.
+    # Find better way to do this?
+    def inverse_transform(self, X):
+        return X
+
 
 class PandasTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, transformer=None, **transformer_params):
@@ -124,7 +133,7 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X):
         check_is_fitted(self)
 
-        assert isinstance(X, self.type_), msg
+        assert isinstance(X, self.type_)
 
         if isinstance(X, pd.Series):
             assert X.name == self.name_
@@ -137,7 +146,25 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
 
         return X_pd
 
+    def inverse_transform(self, X):
+        check_is_fitted(self)
+        assert isinstance(X, self.type_)
 
+        if isinstance(X, pd.Series):
+            assert X.name == self.name_
+            X_ = self.transformer.inverse_transform(X.to_numpy().reshape(-1, 1))
+            X_pd = pd.Series(X_.flatten(), name=self.name_, index=X.index)
+        elif isinstance(X, pd.DataFrame):
+            assert X.columns == self.columns_
+            X_ = self.transformer.inverse_transform(X)
+            X_pd = pd.DataFrame(X_, columns=self.columns_, index=X.index)
+
+        return X_pd
+
+
+
+
+# TODO: Move to fit models section
 class LaggedFeaturesProcessor(BaseEstimator, TransformerMixin):
     """
     (Not exactly a sklearn transformer)
@@ -277,6 +304,7 @@ def create_pipeline(
         resample_freq="T",
         scaler=None,
         func=None,
+        inverse_func=None,
         **kwargs
 ):
     # TODO: Allow user to specify a function that gets put either in front or
@@ -295,7 +323,9 @@ def create_pipeline(
     # NOTE: scaler ignored when func is specified
     if func is not None:
         func = _get_callable(func)
-        func_transformer = FunctionTransformer(func=func, **kwargs)
+        inverse_func = _get_callable(inverse_func)
+        func_transformer = FunctionTransformer(
+            func=func, inverse_func=inverse_func, **kwargs)
         pipeline_list.append(
             ("func", PandasTransformer(transformer=func_transformer)))
     elif scaler is not None:
