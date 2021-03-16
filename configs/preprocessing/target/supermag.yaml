@@ -1,0 +1,24 @@
+# @package _group_
+
+name: supermag
+
+loading:
+  data_dir: data/supermag
+  station: "OTT"
+
+  # Compute horizontal component
+  horizontal: true
+
+pipeline:
+  interpolate: false
+  resample_freq: '20T'
+  resample_func: "max"
+
+  # Name of sklearn transformer. Must be within scope in src/process_data.py
+  scaler: null
+
+  # If specified, scaler will be FunctionTransformer with arg func
+  func: "np.log"
+  inverse_func: "np.exp"
+
+  # Other keyword arguments for scaler or func can also be passed

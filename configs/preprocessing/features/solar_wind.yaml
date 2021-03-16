@@ -3,7 +3,7 @@
 name: solar_wind
 
 loading:
-  path: data/raw/solar_wind.csv
+  path: data/solar_wind.csv
   time_col: "times"
   features:
     - "b"
@@ -27,4 +27,4 @@ pipeline:
   resample_func: "mean"
   scaler: null
 
-output_path: data/processed/solar_wind.pkl
+# output_path: data/processed/solar_wind.pkl
