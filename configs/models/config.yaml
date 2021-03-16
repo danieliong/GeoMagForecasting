@@ -6,22 +6,29 @@ defaults:
 
 hydra:
   sweep:
-    dir: multirun/${model}/${hydra.job.overrride_dirname}/${now:%Y-%m-%d}
+    dir: multirun/${model}/${now:%Y-%m-%d_%H-%M}
+    subdir: ${hydra.job.override_dirname}
   job:
     config:
       override_dirname:
         kv_sep: '-'
         item_sep: "_"
-        # TODO
-        exclude_keys = []
+  # job_logging:
+  #   level: INFO
+  #   handlers:
+  #   - file
 
 lag: "H"
 exog_lag: "H"
 lead: "H"
 
+features: solar_wind
+target: supermag
+overrides: end=2011-01-01
 
+# DON'T OVERRIDE/CHANGE
 inputs:
-  dir: outputs/2021-03-15/process_data/time.end-2011-01-01
+  dir: outputs/process_data/features=${features},target=${target}/${overrides}
   features_pipeline: "features_pipeline.pkl"
   target_pipeline: "target_pipeline.pkl"
   train_features: "train_features.pkl"

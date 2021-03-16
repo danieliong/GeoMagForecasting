@@ -16,6 +16,8 @@ from sklearn.base import clone
 # NOTE: Had to install src as package first
 from src.utils import is_pandas, is_numpy, save_output
 from src.preprocessing.loading import load_solar_wind, load_supermag
+
+# TODO: Move this to model fitting section
 from src.preprocessing.processors import create_pipeline, LaggedFeaturesProcessor
 
 logger = logging.getLogger(__name__)
@@ -114,8 +116,8 @@ def main(cfg: DictConfig) -> None:
 
     logger.info("Loading data...")
     features_df, target_df = load_data(cfg,
-                                       start=cfg.time.start,
-                                       end=cfg.time.end)
+                                       start=cfg.start,
+                                       end=cfg.end)
 
     logger.info("Splitting data...")
     train, test = split_data(features_df, target_df, cfg)

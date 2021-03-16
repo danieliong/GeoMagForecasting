@@ -24,3 +24,4 @@ param:
 
 outputs:
   model: "model.xgb"
+  cv_results: "cv_results.csv"

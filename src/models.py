@@ -2,7 +2,7 @@
 
 import json
 import numpy as np
-
+import pandas as pd
 import xgboost as xgb
 import lightgbm as lgb
 
@@ -91,8 +91,9 @@ class HydraXGB(HydraModel):
 
         if "cv_results" in self.outputs.keys():
             if self.outputs["cv_results"] is not None:
-                with open(self.outputs["cv_results"], "w") as f:
-                    json.dump(self.cv_res_, f)
+                cv_res = pd.DataFrame(self.cv_res_)
+                cv_res.to_csv(self.outputs["cv_results"])
+
 
 # Dictionary with model name as keys and HydraModel class as value
 MODELS_DICT = {"xgboost": HydraXGB}
