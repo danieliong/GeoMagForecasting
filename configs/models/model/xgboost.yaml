@@ -6,21 +6,38 @@ hydra:
   sweeper:
     optim:
       optimizer: OnePlusOne
-      budget: 100
+      budget: 50
       num_workers: 4
     parametrization:
       param.learning_rate:
-        init: 0.2
+        # init: 0.2
         lower: 0.001
         upper: 0.6
+      param.max_depth:
+        integer: true
+        # init: 6
+        lower: 1
+        upper: 9
+      param.min_child_weight:
+        integer: true
+        # init: 2
+        lower: 1
+        upper: 4
+      param.colsample_bytree:
+        # init: 0.8
+        lower: 0.5
+        upper: 1.0
+
+param:
+  learning_rate: 0.2
+  max_depth: 6
+  min_child_weight: 2
+  colsample_bytree: 0.8
 
 kwargs:
   num_boost_round: 100
   early_stopping_rounds: 30
   metrics: "rmse"
-
-param:
-  learning_rate: 0.2
 
 outputs:
   model: "model.xgb"
