@@ -90,20 +90,20 @@ def split_data(X, y, cfg):
 
 # QUESTION: Should I compute lagged features here?
 # QUESTION: Pass in clone of feature processor for transformer_y?
-def compute_lagged_features(X, y, cfg, transformer_y=None, processor=None):
+# def compute_lagged_features(X, y, cfg, transformer_y=None, processor=None):
 
-    kwargs = cfg.lagged_features
+#     if processor is None:
+#         # Transform lagged y same way as other solar wind features
+#         processor = LaggedFeaturesProcessor(transformer_y=transformer_y,
+#                                             lag=cfg.lag,
+#                                             exog_lag=cfg.exog_lag,
+#                                             lead=cfg.lead)
+#         processor.fit(X, y)
 
-    if processor is None:
-        # Transform lagged y same way as other solar wind features
-        processor = LaggedFeaturesProcessor(transformer_y=transformer_y,
-                                            **kwargs)
-        processor.fit(X, y)
+#     # NOTE: fitted transformer is an attribute in processor
+#     X_lagged, y_target = processor.transform(X, y)
 
-    # NOTE: fitted transformer is an attribute in processor
-    X_lagged, y_target = processor.transform(X, y)
-
-    return X_lagged, y_target, processor
+#     return X_lagged, y_target, processor
 
 
 @hydra.main(config_path="../configs/preprocessing", config_name="config")
@@ -142,20 +142,20 @@ def main(cfg: DictConfig) -> None:
                      + "between train and test.")
         y_test.drop(index=y_overlap_idx, inplace=True)
 
-    logger.info("Computing lagged features...")
+    # logger.info("Computing lagged features...")
 
+    # NOTE: Moving this section to fit_models
     # HACK: Passing in clone of features_pipeline might be problem if
     # Resampler is in the pipeline. Fortunately, Resampler doesn't do anything if
     # freq is < data's freq. Find a better way to handle this.
     # IDEA: Remove Resampler?
-    train_features, train_target, processor = compute_lagged_features(
-        X_train, y_train, cfg, transformer_y=clone(features_pipeline))
+    # train_features, train_target, processor = compute_lagged_features(
+    #     X_train, y_train, cfg, transformer_y=clone(features_pipeline))
 
     # NOTE: Passing in processor here because it contains a transformer that
     # should only be fitted with training data
-    # FIXME: Iterator too short error
-    test_features, test_target, _ = compute_lagged_features(
-        X_test, y_test, cfg, processor=processor)
+    # test_features, test_target, _ = compute_lagged_features(
+    #     X_test, y_test, cfg, processor=processor)
 
     logger.info("Saving outputs...")
     # FIXME: symlink needs to be changed to dir name since cfg.outline contains
@@ -166,10 +166,10 @@ def main(cfg: DictConfig) -> None:
     save_output(target_pipeline,
                 cfg.output.target_pipeline,
                 symlink=cfg.symlink)
-    save_output(train_features, cfg.output.train_features, symlink=cfg.symlink)
-    save_output(test_features, cfg.output.test_features, symlink=cfg.symlink)
-    save_output(train_target, cfg.output.train_target, symlink=cfg.symlink)
-    save_output(test_target, cfg.output.test_target, symlink=cfg.symlink)
+    save_output(X_train, cfg.output.train_features, symlink=cfg.symlink)
+    save_output(X_test, cfg.output.test_features, symlink=cfg.symlink)
+    save_output(y_train, cfg.output.train_target, symlink=cfg.symlink)
+    save_output(y_test, cfg.output.test_target, symlink=cfg.symlink)
 
 
 if __name__ == '__main__':

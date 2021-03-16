@@ -5,33 +5,83 @@ import pandas as pd
 import numpy as np
 import logging
 
-from src.models import *
+from src.models import get_model
 from hydra.utils import to_absolute_path
+from omegaconf import OmegaConf
 from pathlib import Path
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error
+from sklearn.base import clone
+
+from src.preprocessing.processors import LaggedFeaturesProcessor
 
 logger = logging.getLogger(__name__)
 
 
-def load_inputs(cfg, train=True):
+def load_inputs(name, cfg, type="data"):
 
     params = cfg.inputs
     dir_path = Path(params.dir)
+    rel_path = dir_path / params[name]
 
-    def _load(name):
-        rel_path = dir_path / params[name]
-        abs_path = to_absolute_path(rel_path)
-        return np.load(abs_path)
+    abs_path = Path(to_absolute_path(rel_path))
+    ext = abs_path.suffix
 
+    if type == "data":
+        if ext == ".npy":
+            inputs = np.load(abs_path)
+        elif ext == ".pkl":
+            inputs = pd.read_pickle(abs_path)
+        else:
+            raise ValueError("Data path must have extension .npy or .pkl.")
+    elif type == "processor":
+        with open(abs_path, "rb") as f:
+            if ext == ".pkl":
+                import dill
+                inputs = dill.load(f)
+            elif ext == ".joblib":
+                import joblib
+                inputs = joblib.load(f)
+
+    return inputs
+
+
+def compute_lagged_features(cfg,
+                            train=True,
+                            processor=None):
+
+    if not train and processor is None:
+        raise ValueError("processor must be specified if train=False")
+
+    # Load processed data
     if train:
-        X = _load("train_features")
-        y = _load("train_target")
+        X = load_inputs("train_features", cfg, type="data")
+        y = load_inputs("train_target", cfg, type="data")
     else:
-        X = _load("test_features")
-        y = _load("test_target")
+        X = load_inputs("test_features", cfg, type="data")
+        y = load_inputs("test_target", cfg, type="data")
 
-    return X, y
+
+    # Load features pipeline
+    # QUESTION: What if this is really big?
+    # HACK: Passing in clone of features_pipeline might be problem if
+    # Resampler is in the pipeline. Fortunately, Resampler doesn't do anything if
+    # freq is < data's freq. Find a better way to handle this.
+    # IDEA: Remove Resampler?
+    transformer_y = clone(load_inputs("features_pipeline", cfg, type="processor"))
+
+    if processor is None:
+        # Transform lagged y same way as other solar wind features
+        processor = LaggedFeaturesProcessor(transformer_y=transformer_y,
+                                            lag=cfg.lag,
+                                            exog_lag=cfg.exog_lag,
+                                            lead=cfg.lead)
+        processor.fit(X, y)
+
+    # NOTE: fitted transformer is an attribute in processor
+    X_lagged, y_target = processor.transform(X, y)
+
+    return X_lagged, y_target, processor
 
 
 def get_cv(y, cfg):
@@ -74,8 +124,8 @@ def main(cfg):
 
     model_name = cfg.model
 
-    logger.debug("Loading training data...")
-    X_train, y_train = load_inputs(cfg, train=True)
+    logger.info("Loading training data and computing lagged features...")
+    X_train, y_train, processor = compute_lagged_features(cfg, train=True)
 
     logger.debug("Getting CV split...")
     cv = get_cv(y_train, cfg)
@@ -84,8 +134,12 @@ def main(cfg):
     model = get_model(model_name, cfg)
     model.fit(X_train, y_train, cv=cv)
 
-    logger.debug("Loading testing data...")
-    X_test, y_test = load_inputs(cfg, train=False)
+    logger.info(f"Saving model outputs...")
+    model.save_output()
+
+    logger.info("Loading testing data and computing lagged features...")
+    X_test, y_test, _ = compute_lagged_features(
+        cfg, train=False, processor=processor)
 
     logger.debug(f"Computing predictions...")
     ypred = model.predict(X_test)

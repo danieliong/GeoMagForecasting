@@ -15,16 +15,19 @@ hydra:
         # TODO
         exclude_keys = []
 
+lag: "H"
+exog_lag: "H"
+lead: "H"
 
 
 inputs:
   dir: outputs/2021-03-15/process_data/time.end-2011-01-01
   features_pipeline: "features_pipeline.pkl"
   target_pipeline: "target_pipeline.pkl"
-  train_features: "train_features.npy"
-  train_target: "train_target.npy"
-  test_features: "test_features.npy"
-  test_target: "test_target.npy"
+  train_features: "train_features.pkl"
+  train_target: "train_target.pkl"
+  test_features: "test_features.pkl"
+  test_target: "test_target.pkl"
 
 
 split:
