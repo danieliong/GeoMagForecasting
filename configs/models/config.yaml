@@ -2,6 +2,7 @@
 
 defaults:
   - hydra/sweeper: nevergrad
+  - hydra/launcher: submitit_slurm
   - model: xgboost
 
 hydra:
