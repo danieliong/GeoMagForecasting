@@ -97,6 +97,17 @@ def get_cv(y, cfg):
     return splitter
 
 
+def convert_pred_to_pd(ypred, y):
+
+    if isinstance(ypred, np.ndarray):
+        # NOTE: This should be okay but check to make sure later.
+        if isinstance(y, pd.DataFrame):
+            ypred = pd.DataFrame(ypred, columns=y.columns, index=y.index)
+        elif isinstance(y, pd.Series):
+            ypred = pd.Series(ypred, name=y.name, index=y.index)
+
+    return ypred
+
 
 def compute_metric(y, ypred, cfg):
     # QUESTION: Should we inverse transform y and ypred before
@@ -110,15 +121,6 @@ def compute_metric(y, ypred, cfg):
         metric = "rmse"
 
     if inverse_transform:
-
-        # This is needed because PandasTransformer requires ypred to be
-        # same type and have same name as y
-        if isinstance(ypred, np.ndarray):
-            # NOTE: This should be okay but check to make sure later.
-            if isinstance(y, pd.DataFrame):
-                ypred = pd.DataFrame(ypred, columns=y.columns, index=y.index)
-            elif isinstance(y, pd.Series):
-                ypred = pd.Series(ypred, name=y.name, index=y.index)
 
         logger.debug("Inverse transforming y and predictions...")
         target_pipeline = load_inputs("target_pipeline", cfg, type="processor")
@@ -140,6 +142,7 @@ def compute_metric(y, ypred, cfg):
 def main(cfg):
 
     model_name = cfg.model
+    pred_path = cfg.outputs.predictions
 
     logger.info("Loading training data and computing lagged features...")
     X_train, y_train, processor = compute_lagged_features(cfg, train=True)
@@ -160,9 +163,14 @@ def main(cfg):
 
     logger.info("Computing predictions...")
     ypred = model.predict(X_test)
+    ypred = convert_pred_to_pd(ypred, y_test)
     metric_val = compute_metric(y_test, ypred, cfg)
 
+    logger.info("Saving predictions...")
+    ypred.to_pickle(pred_path)
+
     return metric_val
+
 
 if __name__ == '__main__':
     main()

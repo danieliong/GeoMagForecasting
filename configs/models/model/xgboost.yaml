@@ -41,4 +41,5 @@ kwargs:
 
 outputs:
   model: "model.xgb"
+  predictions: "ypred.pkl"
   cv_results: "cv_results.csv"
