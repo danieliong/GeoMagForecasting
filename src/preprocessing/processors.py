@@ -263,7 +263,7 @@ class LaggedFeaturesProcessor(BaseEstimator, TransformerMixin):
 
         # self.pipeline_y_ = Pipeline(pipeline_list)
 
-        self.transformer_y.transform(y)
+        self.transformer_y.fit(y)
 
         return self
 

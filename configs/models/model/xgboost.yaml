@@ -11,7 +11,7 @@ hydra:
       account: stats_dept1
   sweeper:
     optim:
-      optimizer: OnePlusOne
+      optimizer: NGOpt
       budget: 30
       num_workers: 30
     parametrization:

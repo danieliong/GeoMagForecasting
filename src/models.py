@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import logging
 import json
 import numpy as np
 import pandas as pd
@@ -9,6 +10,7 @@ import lightgbm as lgb
 from abc import ABC, abstractmethod
 from omegaconf import OmegaConf
 
+logger = logging.getLogger(__name__)
 
 
 class HydraModel(ABC):
@@ -17,7 +19,7 @@ class HydraModel(ABC):
 
         params = OmegaConf.select(cfg, "param")
         assert params is not None, "param must be provided in Hydra."
-        logger.debug(OmegaConf.to_yaml(param))
+        logger.debug(OmegaConf.to_yaml(params))
         self.params = OmegaConf.to_container(params)
 
         # Keyword arguments used in fit.
