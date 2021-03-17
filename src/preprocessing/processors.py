@@ -15,7 +15,7 @@ from sklearn.preprocessing import FunctionTransformer
 logger = logging.getLogger(__name__)
 
 class Resampler(TransformerMixin):
-    def __init__(self, freq="T", label="right", func="max", verbose=True,
+    def __init__(self, freq="T", label="right", func="mean", verbose=True,
                  **kwargs):
         """Scikit-learn Wrapper for Pandas resample method
 
@@ -45,6 +45,9 @@ class Resampler(TransformerMixin):
         return to_offset(pd.infer_freq(X.index))
 
     def fit(self, X, y=None):
+
+        if self.func is None:
+            self.func = "mean"
 
         self.freq = to_offset(self.freq)
         self.X_freq_ = self._get_freq(X)
@@ -246,17 +249,21 @@ class LaggedFeaturesProcessor(BaseEstimator, TransformerMixin):
         n_exog = int((self.exog_lag / self.freq_X_) * X.shape[1])
         self.n_cols_ = n_lag + n_exog
 
-        pipeline_list = [("resampler", Resampler(freq=self.freq_y_)),
-                         ("interpolator", Interpolator())]
+        # NOTE: Don't need resampler. Target is already resampled in process_data
+        # pipeline_list = [
+        #     # ("resampler", Resampler(freq=self.freq_y_)),
+        #     ("interpolator", Interpolator())
+        # ]
 
-        if self.transformer_y is not None:
-            # NOTE: Pass in clone of feature pipeline for transformer_y
-            # transformer_y = _get_callable(self.transformer_y)
-            pipeline_list.append(
-                ("transformer", self.transformer_y))
+        # if self.transformer_y is not None:
+        #     # NOTE: Pass in clone of feature pipeline for transformer_y
+        #     # transformer_y = _get_callable(self.transformer_y)
+        #     pipeline_list.append(
+        #         ("transformer", self.transformer_y))
 
-        self.pipeline_y_ = Pipeline(pipeline_list)
-        self.pipeline_y_.fit(y)
+        # self.pipeline_y_ = Pipeline(pipeline_list)
+
+        self.transformer_y.transform(y)
 
         return self
 
@@ -266,9 +273,7 @@ class LaggedFeaturesProcessor(BaseEstimator, TransformerMixin):
         # TODO: Write tests
         # NOTE: Include interpolator in transformer_y if want to interpolate
 
-
-        if self.transformer_y is not None:
-            y = self.transformer_y.transform(y)
+        y = self.transformer_y.transform(y)
 
         max_time = max(to_offset(self.lag) + y.index[0],
                        to_offset(self.exog_lag) + X.index[0])
@@ -314,8 +319,10 @@ def create_pipeline(
 
     # NOTE: Resampler does nothing when freq < data freq
     # and fills gaps with NA when freq = data freq
-    pipeline_list.append(
-        ("resampler", Resampler(freq=resample_freq, func=resample_func)))
+
+    if resample_freq is not None:
+        pipeline_list.append(
+            ("resampler", Resampler(freq=resample_freq, func=resample_func)))
 
     if interpolate:
         pipeline_list.append(("interpolator", Interpolator()))
@@ -334,6 +341,9 @@ def create_pipeline(
             ("scaler", PandasTransformer(transformer=scaler_callable(), **kwargs)))
     else:
         logger.debug("scaler or func was not specified.")
+
+    if len(pipeline_list) == 0:
+        return None
 
     pipeline = Pipeline(pipeline_list)
 

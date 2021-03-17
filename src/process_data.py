@@ -126,14 +126,22 @@ def main(cfg: DictConfig) -> None:
     logger.info("Transforming features...")
     features_pipeline = create_pipeline(**cfg.solar_wind.pipeline)
 
-    X_train = features_pipeline.fit_transform(train.X)
-    X_test = features_pipeline.transform(test.X)
+    if features_pipeline is None:
+        X_train = train.X
+        X_test = test.X
+    else:
+        X_train = features_pipeline.fit_transform(train.X)
+        X_test = features_pipeline.transform(test.X)
 
     logger.info("Transforming target...")
     target_pipeline = create_pipeline(**cfg.target.pipeline)
 
-    y_train = target_pipeline.fit_transform(train.y)
-    y_test = target_pipeline.transform(test.y)
+    if target_pipeline is None:
+        y_train = train.y
+        y_test = test.y
+    else:
+        y_train = target_pipeline.fit_transform(train.y)
+        y_test = target_pipeline.transform(test.y)
 
     # HACK: Delete overlap in y times.
     # Overlap occurs when we resample.
@@ -144,20 +152,6 @@ def main(cfg: DictConfig) -> None:
                      + "between train and test.")
         y_test.drop(index=y_overlap_idx, inplace=True)
 
-    # logger.info("Computing lagged features...")
-
-    # NOTE: Moving this section to fit_models
-    # HACK: Passing in clone of features_pipeline might be problem if
-    # Resampler is in the pipeline. Fortunately, Resampler doesn't do anything if
-    # freq is < data's freq. Find a better way to handle this.
-    # IDEA: Remove Resampler?
-    # train_features, train_target, processor = compute_lagged_features(
-    #     X_train, y_train, cfg, transformer_y=clone(features_pipeline))
-
-    # NOTE: Passing in processor here because it contains a transformer that
-    # should only be fitted with training data
-    # test_features, test_target, _ = compute_lagged_features(
-    #     X_test, y_test, cfg, processor=processor)
 
     logger.info("Saving outputs...")
     # FIXME: symlink needs to be changed to dir name since cfg.outline contains
