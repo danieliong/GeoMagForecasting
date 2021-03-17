@@ -14,10 +14,15 @@ hydra:
       override_dirname:
         kv_sep: '-'
         item_sep: "_"
+        exclude_keys:
+         - overrides
+  
   # job_logging:
   #   level: INFO
   #   handlers:
   #   - file
+
+
 
 lag: "H"
 exog_lag: "H"

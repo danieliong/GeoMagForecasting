@@ -2,12 +2,18 @@
 
 model: xgboost
 
+# TODO: Find way to separate this into new file
 hydra:
+  launcher:
+    mem_gb: 15
+    cpus_per_task: 1
+    additional_parameters:
+      account: stats_dept1
   sweeper:
     optim:
       optimizer: OnePlusOne
-      budget: 50
-      num_workers: 4
+      budget: 30
+      num_workers: 30
     parametrization:
       param.learning_rate:
         # init: 0.2

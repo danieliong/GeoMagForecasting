@@ -17,11 +17,13 @@ class HydraModel(ABC):
 
         params = OmegaConf.select(cfg, "param")
         assert params is not None, "param must be provided in Hydra."
+        logger.debug(OmegaConf.to_yaml(param))
         self.params = OmegaConf.to_container(params)
 
         # Keyword arguments used in fit.
         # Pop keys when required
         kwargs = OmegaConf.select(cfg, "kwargs")
+        logger.debug(OmegaConf.to_yaml(kwargs))
         self.kwargs = OmegaConf.to_container(kwargs)
 
         outputs = OmegaConf.select(cfg, "outputs")

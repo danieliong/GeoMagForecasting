@@ -144,6 +144,8 @@ def compute_metric(y, ypred, cfg):
     elif metric == "mse":
         metric_val = mean_squared_error(y, ypred, squared=True)
 
+    logger.info(f"{metric}: {metric_val}")
+
     return float(metric_val)
 
 
