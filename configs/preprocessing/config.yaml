@@ -7,11 +7,14 @@ defaults:
 hydra:
   run:
     dir: outputs/${hydra.job.name}/features=${solar_wind.name},target=${target.name}/${hydra.job.override_dirname}/
-  # job:
-  #   config:
-  #     override_dirname:
-  #       kv_sep: '-'
-  #       item_sep: "_"
+  job:
+    config:
+      override_dirname:
+        kv_sep: '-'
+        item_sep: "_"
+       exclude_keys:
+         - target.loading.data_dir
+         - solar_wind.loading.path
 
 # Symlink data from data/processed
 # Probably will delete this option
