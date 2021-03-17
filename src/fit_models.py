@@ -176,7 +176,7 @@ def main(cfg):
     logger.info("Computing predictions...")
     ypred = model.predict(X_test)
     ypred = convert_pred_to_pd(ypred, y_test)
-    ypred = inv_transform_targets(y_test, ypred, cfg)
+    y_test, ypred = inv_transform_targets(y_test, ypred, cfg)
 
     metric_val = compute_metric(y_test, ypred, cfg)
 
