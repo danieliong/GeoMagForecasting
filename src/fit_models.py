@@ -69,6 +69,8 @@ def compute_lagged_features(cfg,
     # freq is < data's freq. Find a better way to handle this.
     # IDEA: Remove Resampler?
     transformer_y = clone(load_inputs("features_pipeline", cfg, type="processor"))
+    # TODO: Delete Resampler in pipeline
+    # It is okay for now because feature freq is probably < target freq.
 
     if processor is None:
         # Transform lagged y same way as other solar wind features
@@ -85,6 +87,7 @@ def compute_lagged_features(cfg,
 
 
 def get_cv(y, cfg):
+
 
     split_params = OmegaConf.to_container(cfg.split)
     method = split_params.pop("method")
@@ -109,23 +112,30 @@ def convert_pred_to_pd(ypred, y):
     return ypred
 
 
+def inv_transform_targets(y, ypred, cfg):
+
+    inverse_transform = OmegaConf.select(cfg, "inverse_transform")
+
+    if inverse_transform:
+        logger.debug("Inverse transforming y and predictions...")
+        target_pipeline = load_inputs("target_pipeline", cfg, type="processor")
+        y = target_pipeline.inverse_transform(y)
+        ypred = target_pipeline.inverse_transform(ypred)
+
+    return y, ypred
+
+
 def compute_metric(y, ypred, cfg):
     # QUESTION: Should we inverse transform y and ypred before
     # computing metrics?
-
-    inverse_transform = OmegaConf.select(cfg, "inverse_transform")
 
     metric = OmegaConf.select(cfg, "metric")
     if metric is None:
         # Default to rmse
         metric = "rmse"
 
-    if inverse_transform:
-
-        logger.debug("Inverse transforming y and predictions...")
-        target_pipeline = load_inputs("target_pipeline", cfg, type="processor")
-        y = target_pipeline.inverse_transform(y)
-        ypred = target_pipeline.inverse_transform(ypred)
+    # NOTE: We switched to inverse transforming targets before computing metric
+    # y, ypred = inv_transform_targets(y, ypred, cfg)
 
     logger.debug(f"Computing {metric}...")
 
@@ -154,7 +164,7 @@ def main(cfg):
     model = get_model(model_name, cfg)
     model.fit(X_train, y_train, cv=cv)
 
-    logger.info(f"Saving model outputs...")
+    logger.info("Saving model outputs...")
     model.save_output()
 
     logger.info("Loading testing data and computing lagged features...")
@@ -164,6 +174,8 @@ def main(cfg):
     logger.info("Computing predictions...")
     ypred = model.predict(X_test)
     ypred = convert_pred_to_pd(ypred, y_test)
+    ypred = inv_transform_targets(y_test, ypred, cfg)
+
     metric_val = compute_metric(y_test, ypred, cfg)
 
     logger.info("Saving predictions...")
