@@ -18,7 +18,9 @@ pipeline:
   scaler: null
 
   # If specified, scaler will be FunctionTransformer with arg func
-  func: "np.log"
-  inverse_func: "np.exp"
+  func: null
+  inverse_func: null
+  # func: "np.log"
+  # inverse_func: "np.exp"
 
   # Other keyword arguments for scaler or func can also be passed

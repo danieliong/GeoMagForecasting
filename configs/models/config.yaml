@@ -2,7 +2,7 @@
 
 defaults:
   - hydra/sweeper: nevergrad
-  - hydra/launcher: submitit_slurm
+  # - hydra/launcher: submitit_slurm
   - model: xgboost
 
 hydra:
@@ -25,7 +25,7 @@ lead: "H"
 
 features: solar_wind
 target: supermag
-overrides: end=2011-01-01
+overrides: ''
 
 # DON'T OVERRIDE/CHANGE
 inputs:
@@ -45,4 +45,6 @@ split:
   # test_size: .2 # Needs to be int here
 
 metric: "rmse"
+
+# Inverse transform before computing metrics
 inverse_transform: true

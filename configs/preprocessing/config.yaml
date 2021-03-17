@@ -12,7 +12,7 @@ hydra:
       override_dirname:
         kv_sep: '-'
         item_sep: "_"
-       exclude_keys:
+        exclude_keys:
          - target.loading.data_dir
          - solar_wind.loading.path
 
