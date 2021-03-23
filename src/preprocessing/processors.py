@@ -1,21 +1,24 @@
-import itertools
 import pandas as pd
 import numpy as np
 import logging
 
 # from loguru import logger
-from functools import partial
 from pandas.tseries.frequencies import to_offset
-from importlib import import_module
 from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.utils.validation import check_is_fitted
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
+from omegaconf import OmegaConf
 
 logger = logging.getLogger(__name__)
 
+
 class Resampler(TransformerMixin):
-    def __init__(self, freq="T", label="right", func="mean", verbose=True,
+    def __init__(self,
+                 freq="T",
+                 label="right",
+                 func="mean",
+                 verbose=True,
                  **kwargs):
         """Scikit-learn Wrapper for Pandas resample method
 
@@ -54,21 +57,21 @@ class Resampler(TransformerMixin):
 
         return self
 
-
     def transform(self, X, y=None):
 
         X_freq = self._get_freq(X)
         assert X_freq == self.X_freq_, "X does not have the correct frequency."
 
         if X_freq is None:
-            X = X.resample(self.freq, label=self.label, **self.kwargs).apply(self.func)
+            X = X.resample(self.freq, label=self.label,
+                           **self.kwargs).apply(self.func)
         elif self.freq > X_freq:
-            X = X.resample(self.freq, label=self.label, **self.kwargs).apply(self.func)
+            X = X.resample(self.freq, label=self.label,
+                           **self.kwargs).apply(self.func)
         else:
             if self.verbose:
-                logger.debug(
-                    f"Specified frequency ({self.freq}) is <= data "
-                    + f"frequency ({X_freq}). Resampling is ignored.")
+                logger.debug(f"Specified frequency ({self.freq}) is <= data "
+                             + f"frequency ({X_freq}). Resampling is ignored.")
 
         return X
 
@@ -117,7 +120,6 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
         self.transformer = transformer
         self.transformer_params = transformer_params
 
-
     def fit(self, X, y=None, **fit_params):
 
         self.type_ = type(X)
@@ -155,7 +157,8 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
 
         if isinstance(X, pd.Series):
             assert X.name == self.name_
-            X_ = self.transformer.inverse_transform(X.to_numpy().reshape(-1, 1))
+            X_ = self.transformer.inverse_transform(X.to_numpy().reshape(
+                -1, 1))
             X_pd = pd.Series(X_.flatten(), name=self.name_, index=X.index)
         elif isinstance(X, pd.DataFrame):
             assert X.columns == self.columns_
@@ -165,133 +168,39 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
         return X_pd
 
 
+def limited_change(x, factor=1.3):
+    """Apply limited relative change to density and temperature by a set factor"""
+
+    out = x.copy()
+
+    # treat 0 as nan for density and temperature
+    out.loc[out.values == 0] = np.nan
+
+    for i, (d1, d2) in enumerate(zip(out[:-1], out[1:])):
+        if np.isnan(d2):
+            out[i + 1] = d1  # assume persistence
+        else:
+            out[i + 1] = np.nanmax((np.nanmin((d2, d1 * factor)), d1 / factor))
+    return out
 
 
-# TODO: Move to fit models section
-class LaggedFeaturesProcessor(BaseEstimator, TransformerMixin):
-    """
-    (Not exactly a sklearn transformer)
-    NOTE: X, y don't necessarily have the same freq so we can't just pass one
-    combined dataframe.
+def limited_change_speed(speed, density, change_down=30, change_ups=[50, 10]):
+    """Apply limited relative change to speed according to density"""
 
-    HACK: Not a proper scikit learn transformer. fit and transform take X and y.
+    # QUESTION: Which velocity do I use?
 
-    """
-    def __init__(self,
-                 lag="0T",
-                 exog_lag="H",
-                 lead="0T",
-                 transformer_y=None,
-                 njobs=1,
-                 verbose=False,
-                 **transformer_y_kwargs):
-        self.lag = lag
-        self.exog_lag = exog_lag
-        self.lead = lead
-        self.njobs = njobs
-        self.verbose = verbose
-
-        # NOTE: transformer_y must keep input as pd DataFrame
-        # (use PandasTransformer if required)
-        self.transformer_y = transformer_y
-        self.transformer_y_kwargs = transformer_y_kwargs
-
-    def _compute_feature(self, target_time, X, y):
-        """Computes ARX features to predict target at a specified time
-           `target_time`.
-
-        This method ravels subsets of `target` and `self.solar_wind` that depend on
-        `self.lag` and `self.exog_lag` to obtain features to predict the target
-        time series at a specified `target_time`.
-
-        Parameters
-        ----------
-
-        target_time : datetime-like
-            Time to predict.
-        X : pd.DataFrame
-            Exogeneous features
-        y : pd.DataFrame or pd.Series
-            Target time series to use as features to predict at target_time
-
-        Returns
-        -------
-        np.ndarray
-            Array containing features to use to predict target at target_time.
-        """
-
-        # Get start and end times
-        end = target_time - self.lead
-        start = (end - self.lag)
-        start_exog = (end - self.exog_lag)
-
-        # Ravel target and solar wind between start and end time
-        lagged = np.ravel(y[start:end].to_numpy())
-        exog = np.ravel(X[start_exog:end].to_numpy())
-        feature = np.concatenate((lagged, exog))
-
-        return feature
-
-
-    def fit(self, X, y):
-        self.lag = to_offset(self.lag)
-        self.exog_lag = to_offset(self.exog_lag)
-        self.lead = to_offset(self.lead)
-
-        # TODO: Input validation
-        # - pd dataframe
-
-        # TODO: Replace with function from utils
-        self.freq_X_ = to_offset(pd.infer_freq(X.index))
-        self.freq_y_ = to_offset(pd.infer_freq(y.index))
-
-        n_lag = int(self.lag / self.freq_y_)
-        n_exog = int((self.exog_lag / self.freq_X_) * X.shape[1])
-        self.n_cols_ = n_lag + n_exog
-
-        # NOTE: Don't need resampler. Target is already resampled in process_data
-        # pipeline_list = [
-        #     # ("resampler", Resampler(freq=self.freq_y_)),
-        #     ("interpolator", Interpolator())
-        # ]
-
-        # if self.transformer_y is not None:
-        #     # NOTE: Pass in clone of feature pipeline for transformer_y
-        #     # transformer_y = _get_callable(self.transformer_y)
-        #     pipeline_list.append(
-        #         ("transformer", self.transformer_y))
-
-        # self.pipeline_y_ = Pipeline(pipeline_list)
-
-        self.transformer_y.fit(y)
-
-        return self
-
-
-    def transform(self, X, y):
-        # TODO: Check if freqs is same as in fit
-        # TODO: Write tests
-        # NOTE: Include interpolator in transformer_y if want to interpolate
-
-        y = self.transformer_y.transform(y)
-
-        max_time = max(to_offset(self.lag) + y.index[0],
-                       to_offset(self.exog_lag) + X.index[0])
-        cutoff = max_time + self.lead
-        target_times = y.index[y.index > cutoff]
-        n_obs = len(target_times)
-
-        compute_feature_ = partial(self._compute_feature, X=X, y=y)
-        features_map = map(compute_feature_, target_times)
-
-        # TODO: Implement parallel
-
-        features_iter = itertools.chain.from_iterable(features_map)
-        features = np.fromiter(features_iter,
-                               dtype=np.float32,
-                               count=n_obs * self.n_cols_).reshape(n_obs, self.n_cols_)
-
-        return features, y.loc[target_times]
+    out = speed.copy()
+    for i, (d1, d2) in enumerate(zip(out[:-1], out[1:])):
+        if np.isnan(d2):
+            out[i + 1] = d1  # assume persistence
+        else:
+            if density[i + 1] > density[i]:
+                out[i + 1] = np.nanmax((np.nanmin(
+                    (d2, d1 + change_ups[0])), d1 - change_down))
+            else:
+                out[i + 1] = np.nanmax((np.nanmin(
+                    (d2, d1 + change_ups[1])), d1 - change_down))
+    return out
 
 
 def _get_callable(obj_str):
@@ -303,48 +212,104 @@ def _get_callable(obj_str):
     return obj
 
 
-def create_pipeline(
-        interpolate=True,
-        resample_func="mean",
-        resample_freq="T",
-        scaler=None,
-        func=None,
-        inverse_func=None,
-        **kwargs
-):
-    # TODO: Allow user to specify a function that gets put either in front or
-    # last in pipeline
+class HydraPipeline(BaseEstimator, TransformerMixin):
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.pipeline_list = []
 
-    pipeline_list = []
+        # NOTE: Add new method for each processing step
 
-    # NOTE: Resampler does nothing when freq < data freq
-    # and fills gaps with NA when freq = data freq
+    def _add_interpolate(self):
+        if OmegaConf.is_none(self.cfg.interpolate):
+            return None
+        else:
+            logger.debug("Interpolating...")
 
-    if resample_freq is not None:
-        pipeline_list.append(
-            ("resampler", Resampler(freq=resample_freq, func=resample_func)))
+        if isinstance(self.cfg.interpolate, bool):
+            if self.cfg.interpolate:
+                self.pipeline_list.append(("interpolator", Interpolator()))
+        elif OmegaConf.is_config(self.cfg.interpolate):
+            self.pipeline_list.append(
+                ("interpolator", Interpolator(**self.cfg.interpolate)))
 
-    if interpolate:
-        pipeline_list.append(("interpolator", Interpolator()))
+    def _add_resample(self):
+        if OmegaConf.is_none(self.cfg.resample):
+            return None
+        else:
+           logger.debug("Resampling...")
 
-    # NOTE: scaler ignored when func is specified
-    if func is not None:
-        func = _get_callable(func)
-        inverse_func = _get_callable(inverse_func)
-        func_transformer = FunctionTransformer(
-            func=func, inverse_func=inverse_func, **kwargs)
-        pipeline_list.append(
-            ("func", PandasTransformer(transformer=func_transformer)))
-    elif scaler is not None:
-        scaler_callable = _get_callable(scaler)
-        pipeline_list.append(
-            ("scaler", PandasTransformer(transformer=scaler_callable(), **kwargs)))
-    else:
-        logger.debug("scaler or func was not specified.")
+        if OmegaConf.is_config(self.cfg.resample):
+            self.pipeline_list.append(
+                ("resampler", Resampler(**self.cfg.resample)))
 
-    if len(pipeline_list) == 0:
-        return None
+    def _add_scaler_func(self):
 
-    pipeline = Pipeline(pipeline_list)
+        if (OmegaConf.is_none(self.cfg.scaler)
+                and OmegaConf.is_none(self.cfg.func)):
+            return None
 
-    return pipeline
+        # NOTE: scaler ignored when func is specified
+        func = self.cfg.func.func
+        inverse_func = self.cfg.func.inverse_func
+        scaler = self.cfg.scaler.scaler
+
+        if func is not None:
+            logger.debug(f"Scaling using function {func}...")
+
+            func = _get_callable(func)
+            inverse_func = _get_callable(inverse_func)
+            func_transformer = FunctionTransformer(func=func,
+                                                   inverse_func=inverse_func,
+                                                   **self.cfg.func.kwargs)
+            self.pipeline_list.append(
+                ("func", PandasTransformer(transformer=func_transformer)))
+
+        elif scaler is not None:
+            logger.debug(f"Scaling using scaler {scaler}...")
+
+            scaler_callable = _get_callable(scaler)
+            self.pipeline_list.append(
+                ("scaler",
+                 PandasTransformer(transformer=scaler_callable(),
+                                   **self.cfg.scaler.kwargs)))
+        else:
+            logger.debug("scaler or func was not specified.")
+
+    def _add_filter(self):
+
+        if OmegaConf.is_none(self.cfg.filter):
+            return None
+
+        if self.filter.type == "limited_change":
+            logger.debug("Filtering using filter {self.filter.type}...")
+            # TODO
+            pass
+
+    def create_pipeline(self):
+        # NOTE: Choose order here.
+
+        logger.debug("Creating pipeline...")
+        self._add_resample()
+        self._add_interpolate()
+        self._add_scaler_func()
+
+        if self.pipeline_list is not None:
+            pipeline = Pipeline(self.pipeline_list)
+            return pipeline
+        else:
+            logger.debug("Pipeline is empty.")
+            return None
+
+    def fit(self, X, y=None):
+        self.pipeline_ = self.create_pipeline()
+
+        if self.pipeline_ is not None:
+            self.pipeline_.fit(X, y)
+
+        return self
+
+    def transform(self, X):
+        if self.pipeline_ is None:
+            return X
+        else:
+            return self.pipeline_.transform(X)

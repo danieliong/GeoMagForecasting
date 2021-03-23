@@ -13,11 +13,13 @@ hydra:
         kv_sep: '-'
         item_sep: "_"
         exclude_keys:
-         - target.loading.data_dir
-         - solar_wind.loading.path
+          - target
+          - features
+          - target.loading.data_dir
+          - solar_wind.loading.path
 
 # Symlink data from data/processed
-# Probably will delete this option
+# NOTE: Probably will delete this option
 symlink: false
 
 start: 2010-01-01

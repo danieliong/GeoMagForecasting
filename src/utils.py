@@ -13,8 +13,10 @@ from pathlib import Path
 # from loguru import logger
 from hydra.utils import to_absolute_path, get_original_cwd
 from omegaconf import OmegaConf
+from pandas.tseries.frequencies import to_offset
 
 logger = logging.getLogger(__name__)
+
 
 def is_pandas(x):
     return isinstance(x, (pd.DataFrame, pd.Series))
@@ -22,6 +24,10 @@ def is_pandas(x):
 
 def is_numpy(x):
     return isinstance(x, np.ndarray)
+
+
+def get_freq(x):
+    return to_offset(pd.infer_freq(x.index))
 
 
 def save_output(obj, path, symlink=True):

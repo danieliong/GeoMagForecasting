@@ -13,7 +13,7 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error
 from sklearn.base import clone
 
-from src.preprocessing.processors import LaggedFeaturesProcessor
+from src.preprocessing.lag_processor import LaggedFeaturesProcessor
 
 logger = logging.getLogger(__name__)
 

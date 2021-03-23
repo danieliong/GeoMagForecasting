@@ -9,26 +9,20 @@ from collections import namedtuple
 from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
 from pandas.tseries.frequencies import to_offset
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.base import clone
 # from loguru import logger
 
 # NOTE: Had to install src as package first
 from src.utils import is_pandas, is_numpy, save_output
-from src.preprocessing.loading import load_solar_wind, load_supermag
-
-# TODO: Move this to model fitting section
-from src.preprocessing.processors import create_pipeline, LaggedFeaturesProcessor
+from src.preprocessing.loading import load_solar_wind, load_supermag, load_symh
+from src.preprocessing.processors import HydraPipeline
 
 logger = logging.getLogger(__name__)
-
-LOAD_PARAMS_NAME = "loading"
 
 
 def load_data(cfg, start, end):
     def _get_kwargs(name):
 
-        kwargs = OmegaConf.select(cfg, f"{name}.{LOAD_PARAMS_NAME}")
+        kwargs = OmegaConf.select(cfg, f"{name}.loading")
         kwargs = OmegaConf.to_container(kwargs)
         kwargs['start'] = start
         kwargs['end'] = end
@@ -126,24 +120,32 @@ def main(cfg: DictConfig) -> None:
     # NOTE: train, test are namedtuples with attributes X, y
 
     logger.info("Transforming features...")
-    features_pipeline = create_pipeline(**cfg.solar_wind.pipeline)
+    features_pipeline = HydraPipeline(cfg=cfg.solar_wind.pipeline)
 
-    if features_pipeline is None:
-        X_train = train.X
-        X_test = test.X
-    else:
-        X_train = features_pipeline.fit_transform(train.X)
-        X_test = features_pipeline.transform(test.X)
+    X_train = features_pipeline.fit_transform(train.X)
+    X_test = features_pipeline.transform(test.X)
+
+    # Note used after I created HydraPipeline
+    # if features_pipeline is None:
+    #     X_train = train.X
+    #     X_test = test.X
+    # else:
+    #     X_train = features_pipeline.fit_transform(train.X)
+    #     X_test = features_pipeline.transform(test.X)
 
     logger.info("Transforming target...")
-    target_pipeline = create_pipeline(**cfg.target.pipeline)
+    target_pipeline = HydraPipeline(cfg=cfg.target.pipeline)
 
-    if target_pipeline is None:
-        y_train = train.y
-        y_test = test.y
-    else:
-        y_train = target_pipeline.fit_transform(train.y)
-        y_test = target_pipeline.transform(test.y)
+    y_train = target_pipeline.fit_transform(train.y)
+    y_test = target_pipeline.transform(test.y)
+
+    # Note used after I created HydraPipeline
+    # if target_pipeline is None:
+    #     y_train = train.y
+    #     y_test = test.y
+    # else:
+    #     y_train = target_pipeline.fit_transform(train.y)
+    #     y_test = target_pipeline.transform(test.y)
 
     # HACK: Delete overlap in y times.
     # Overlap occurs when we resample.
@@ -158,6 +160,7 @@ def main(cfg: DictConfig) -> None:
     logger.info("Saving outputs...")
     # FIXME: symlink needs to be changed to dir name since cfg.outline contains
     # relative paths now.
+    # (Probably will delete symlink anyways)
     save_output(features_pipeline,
                 cfg.output.features_pipeline,
                 symlink=cfg.symlink)
