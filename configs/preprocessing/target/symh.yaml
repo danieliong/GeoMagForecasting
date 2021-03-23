@@ -5,6 +5,7 @@ name: symh
 loading:
   path: data/symh.csv
 
+
 pipeline:
   interpolate: false
   resample:
@@ -19,3 +20,5 @@ pipeline:
     func: null
     inverse_func: null
     kwargs: null
+  subset_storms:
+    times_path: data/stormtimes.csv

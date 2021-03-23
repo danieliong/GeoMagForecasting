@@ -8,7 +8,8 @@ from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.utils.validation import check_is_fitted
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, open_dict
+from hydra.utils import to_absolute_path
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,40 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
         return X_pd
 
 
+class StormSubsetter(BaseEstimator, TransformerMixin):
+    def __init__(self, times_path):
+        self.times_path = times_path
+
+
+    def _subset_storm(self, X, row):
+
+        storm_num, storm = row
+
+        if isinstance(X, pd.Series):
+            X = X.to_frame()
+
+        X_ = X.truncate(before=storm['start_time'],
+                        after=storm['end_time'])
+        X_['storm'] = storm_num
+
+        return X_
+
+    def fit(self, X, y=None):
+        path = to_absolute_path(self.times_path)
+        self.storm_times_ = pd.read_csv(path, index_col=0)
+
+        return self
+
+    def transform(self, X, y=None):
+        storm_iter = self.storm_times_.iterrows()
+        X_storms_iter = (self._subset_storm(X, row) for row in storm_iter)
+
+        X_storms = pd.concat(X_storms_iter)
+        X_storms.set_index([X_storms['storm'], X_storms.index], inplace=True)
+
+        return X_storms
+
+
 def limited_change(x, factor=1.3):
     """Apply limited relative change to density and temperature by a set factor"""
 
@@ -220,7 +255,7 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
         # NOTE: Add new method for each processing step
 
     def _add_interpolate(self):
-        if OmegaConf.is_none(self.cfg.interpolate):
+        if OmegaConf.is_none(self.cfg, "interpolate"):
             return None
         else:
             logger.debug("Interpolating...")
@@ -233,7 +268,7 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
                 ("interpolator", Interpolator(**self.cfg.interpolate)))
 
     def _add_resample(self):
-        if OmegaConf.is_none(self.cfg.resample):
+        if OmegaConf.is_none(self.cfg, "resample"):
             return None
         else:
            logger.debug("Resampling...")
@@ -244,8 +279,8 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
 
     def _add_scaler_func(self):
 
-        if (OmegaConf.is_none(self.cfg.scaler)
-                and OmegaConf.is_none(self.cfg.func)):
+        if (OmegaConf.is_none(self.cfg, "scaler")
+                and OmegaConf.is_none(self.cfg, "func")):
             return None
 
         # NOTE: scaler ignored when func is specified
@@ -277,7 +312,7 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
 
     def _add_filter(self):
 
-        if OmegaConf.is_none(self.cfg.filter):
+        if OmegaConf.is_none(self.cfg, "filter"):
             return None
 
         if self.cfg.filter.type == "limited_change":
@@ -285,13 +320,25 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
             # TODO
             pass
 
+    def _add_subset_storms(self):
+
+        if OmegaConf.is_none(self.cfg, "subset_storms"):
+            return None
+
+        logger.debug("Adding storm subsetter to pipeline...")
+        storm_subsetter = StormSubsetter(self.cfg.subset_storms.times_path)
+        self.pipeline_list.append(("storm_subsetter", storm_subsetter))
+
+
     def create_pipeline(self):
         # NOTE: Choose order here.
 
         logger.debug("Creating pipeline...")
-        self._add_resample()
-        self._add_interpolate()
-        self._add_scaler_func()
+        with open_dict(self.cfg):
+            self._add_resample()
+            self._add_interpolate()
+            self._add_subset_storms()
+            self._add_scaler_func()
 
         if self.pipeline_list is not None:
             pipeline = Pipeline(self.pipeline_list)
