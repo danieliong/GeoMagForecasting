@@ -36,6 +36,7 @@ def load_solar_wind(path,
 
     """
 
+    # QUESTION: What is this for?
     if working_dir is not None:
         path = os.path.join(working_dir, path)
 
@@ -119,3 +120,23 @@ def load_supermag(station,
         return data['db_h']
     else:
         return data
+
+
+def load_symh(path,
+              start="2010-01-01",
+              end="2019-12-31",
+              time_col="times",
+              working_dir=None,
+              **kwargs):
+
+    if working_dir is not None:
+        path = os.path.join(working_dir, path)
+
+    data = pd.read_csv(path,
+                       index_col=time_col,
+                       parse_dates=True,
+                       squeeze=True,
+                       dtype=np.float32)
+    data = data.truncate(before=start, after=end)[:-1]
+
+    return data

@@ -1,0 +1,21 @@
+# @package _group_
+
+name: symh
+
+loading:
+  path: data/symh.csv
+
+pipeline:
+  interpolate: false
+  resample:
+    freq: '5T'
+    func: "mean"
+  scaler:
+    # Name of sklearn transformer. Must be within scope in src/process_data.py
+    scaler: null
+    kwargs: null
+  func:
+    # If specified, scaler will be FunctionTransformer with arg func
+    func: null
+    inverse_func: null
+    kwargs: null

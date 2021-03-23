@@ -46,6 +46,8 @@ def load_data(cfg, start, end):
     if cfg.target.name == "supermag":
         target_df = load_supermag(working_dir=original_cwd,
                                   **_get_kwargs("target"))
+    elif cfg.target.name == "symh":
+        target_df = load_symh(working_dir=original_cwd, **_get_kwargs("target"))
 
     return features_df, target_df
 
