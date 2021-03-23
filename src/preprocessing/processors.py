@@ -280,7 +280,7 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
         if OmegaConf.is_none(self.cfg.filter):
             return None
 
-        if self.filter.type == "limited_change":
+        if self.cfg.filter.type == "limited_change":
             logger.debug("Filtering using filter {self.filter.type}...")
             # TODO
             pass
