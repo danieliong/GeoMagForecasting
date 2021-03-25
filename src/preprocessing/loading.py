@@ -6,14 +6,44 @@ import numpy as np
 
 from omegaconf import OmegaConf
 
+COLS_TO_KEEP = [
+    "times",
+    "b",
+    "bx",
+    "by_gse",
+    "bz_gse",
+    "by",
+    "bz",
+    "v",
+    "vx_gse",
+    "vy_gse",
+    "vz_gse",
+    "density",
+    "temperature",
+    "pressure",
+    "e",
+    "beta",
+    "alfven_mach",
+    "x_gse",
+    "y_gse",
+    "z_gse",
+    # QUESTION: What are bsn_*_gse?
+    "bsn_x_gse",
+    "bsn_y_gse",
+    "bsn_z_gse",
+    "mach",
+]
 
-def load_solar_wind(path,
-                    start="2010-01-01",
-                    end="2019-12-31",
-                    features=None,
-                    time_col="times",
-                    working_dir=None,
-                    **kwargs):
+
+def load_solar_wind(
+    path="data/omni_2010-2019.csv.gz",
+    start="2010-01-01",
+    end="2019-12-31",
+    features=COLS_TO_KEEP,
+    time_col="times",
+    working_dir=None,
+    **kwargs,
+):
     """ Load solar wind data
 
     Parameters
@@ -50,12 +80,14 @@ def load_solar_wind(path,
     else:
         usecols = None
 
-    data = pd.read_csv(path,
-                       index_col=time_col,
-                       parse_dates=True,
-                       dtype=np.float32,
-                       usecols=usecols,
-                       **kwargs)
+    data = pd.read_csv(
+        path,
+        index_col=time_col,
+        parse_dates=True,
+        dtype=np.float32,
+        usecols=usecols,
+        **kwargs,
+    )
 
     # Subset times [start, end)
     # NOTE: Not sure if this works if target and features don't have same freq
@@ -64,13 +96,15 @@ def load_solar_wind(path,
     return data
 
 
-def load_supermag(station,
-                  start="2010-01-01",
-                  end="2019-12-31",
-                  horizontal=True,
-                  data_dir="data/raw",
-                  working_dir=None,
-                  **read_kwargs):
+def load_supermag(
+    station,
+    start="2010-01-01",
+    end="2019-12-31",
+    horizontal=True,
+    data_dir="data/raw",
+    working_dir=None,
+    **read_kwargs,
+):
     """Load SuperMag data
 
 
@@ -101,8 +135,7 @@ def load_supermag(station,
 
     # Create mapper for data
     def _read_csv_oneyear(year):
-        return pd.read_csv(f"{data_dir}/{year}/{station}.csv.gz",
-                           **read_kwargs)
+        return pd.read_csv(f"{data_dir}/{year}/{station}.csv.gz", **read_kwargs)
 
     data_mapper = map(_read_csv_oneyear, years)
 
@@ -110,33 +143,33 @@ def load_supermag(station,
     data = pd.concat(data_mapper)
 
     # Set time index
-    data.index = pd.DatetimeIndex(data['Date_UTC'])
-    data.drop(columns=['Date_UTC'], inplace=True)
+    data.index = pd.DatetimeIndex(data["Date_UTC"])
+    data.drop(columns=["Date_UTC"], inplace=True)
 
     data = data.loc[start:end]
 
     if horizontal:
         data.eval("db_h = ((dbn_nez**2)+(dbe_nez**2))**(1/2)", inplace=True)
-        return data['db_h']
+        return data["db_h"]
     else:
         return data
 
 
-def load_symh(path,
-              start="2010-01-01",
-              end="2019-12-31",
-              time_col="times",
-              working_dir=None,
-              **kwargs):
+def load_symh(
+    path="data/symh.csv",
+    start="2010-01-01",
+    end="2019-12-31",
+    time_col="times",
+    working_dir=None,
+    **kwargs,
+):
 
     if working_dir is not None:
         path = os.path.join(working_dir, path)
 
-    data = pd.read_csv(path,
-                       index_col=time_col,
-                       parse_dates=True,
-                       squeeze=True,
-                       dtype=np.float32)
+    data = pd.read_csv(
+        path, index_col=time_col, parse_dates=True, squeeze=True, dtype=np.float32
+    )
     data = data.truncate(before=start, after=end)[:-1]
 
     return data
