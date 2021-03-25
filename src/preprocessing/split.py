@@ -11,7 +11,11 @@ from src.utils import is_pandas
 logger = logging.getLogger(__name__)
 
 
-class StormSubsetter(BaseEstimator, TransformerMixin):
+TRAIN = namedtuple("Train", ["X", "y"])
+TEST = namedtuple("Test", ["X", "y"])
+
+
+class StormSplitter:
     def __init__(self, times_path):
         self.storm_times = pd.read_csv(times_path, index_col=0)
 
@@ -44,43 +48,28 @@ class StormSubsetter(BaseEstimator, TransformerMixin):
         # There's probably a more memory efficient way to do this
         return self._subset_data(X, row)["storm"]
 
-    def get_storm_labels(self, x):
-
-        if self._storms_subsetted(x):
-            return x.index.to_frame().set_index(["times"])
-        else:
-            storm_labels_iter = (
-                self._storm_label(x, row) for row in self._storm_iter()
-            )
-            return pd.concat(storm_labels_iter)
-
-    def _min_y_storms(self, y, storm_labels):
-        # TODO: Get min y for each storm
-        # QUESTION: Should I just assume y has already been subsetted for storms?
-
-        def _get_min_y(y, storm_labels, i):
-            idx = storm_labels == i
-            return np.amin(y[idx], where=~np.isnan(y[idx]), initial=0)
-
-        unique_storms = np.unique(storm_labels)
-
-        min_y_iter = (_get_min_y(y, storm_labels, i) for i in unique_storms)
-        min_y = np.fromiter(min_y_iter, dtype=np.float32, count=unique_storms.shape[0])
-
-        return min_y
-
     def _threshold_storms(self, y, n_storms, threshold, threshold_less_than):
 
-        min_y = self._min_y_storms(y)
+        min_y = y.groupby(level="storm").min()
 
         if threshold_less_than:
-            idx = np.where(min_y < threshold)[0]
+            mask = min_y < threshold
         else:
-            idx = np.where(min_y > threshold)[0]
+            mask = min_y > threshold
 
-        test_idx = np.random.choice(idx, size=n_storms)
+        storms_threshold = min_y[mask.values].index
+        n_threshold = len(storms_threshold)
 
-        return self.storms[test_idx]
+        if n_threshold < n_storms:
+            n_storms = n_threshold
+            logger.debug(
+                "n_storms is greater than number of thresholded storms. Setting n_storms to be %s",
+                n_storms,
+            )
+
+        test_storms = np.random.choice(storms_threshold, size=n_storms, replace=False)
+
+        return test_storms
 
     def _storms_subsetted(self, x):
         # Check if data has been subsetted for storms
@@ -95,6 +84,16 @@ class StormSubsetter(BaseEstimator, TransformerMixin):
 
         return subsetted
 
+    def get_storm_labels(self, x):
+
+        if self._storms_subsetted(x):
+            return x.index.to_frame().set_index(["times"])
+        else:
+            storm_labels_iter = (
+                self._storm_label(x, row) for row in self._storm_iter()
+            )
+            return pd.concat(storm_labels_iter)
+
     def train_test_split(
         self,
         X,
@@ -106,33 +105,40 @@ class StormSubsetter(BaseEstimator, TransformerMixin):
     ):
 
         # If data doesn't have storm index yet, subset it using subset_data
-        # if not self._storms_subsetted(X):
-        #     X = self.subset_data(X)
-        # if not self._storms_subsetted(y):
-        #     y = self.subset_data(y)
-
-        storm_labels_X = self.get_storm_labels(X)
-        storm_labels_y = self.get_storm_labels(y)
+        if not self._storms_subsetted(X):
+            X = self.subset_data(X)
+        if not self._storms_subsetted(y):
+            y = self.subset_data(y)
 
         if test_storms is None:
-            # If threshold, is given, choose storms that are < threshold
-            # for testing. Else choose randomly
 
-            assert isinstance(test_size, (float, int))
+            is_float = isinstance(test_size, float)
+            is_int = isinstance(test_size, int)
+            assert is_float or is_int
 
-            if test_size >= 1:
+            if is_int and test_size >= 1:
                 n_test = test_size
             elif test_size < 1:
-                n_test = test_size * self.n_storms
+                n_test = int(round(test_size * self.n_storms))
 
             if threshold is None:
+                # Choose test storms randomly
                 test_storms = np.random.choice(self.storms, size=n_test)
             else:
+                # Choose test storms that cross threshold
                 test_storms = self._threshold_storms(
                     y, n_test, threshold, threshold_less_than
                 )
 
-        # TODO: Get test storm labels for X and y
+        train_mask = ~self.storms.isin(test_storms)
+        train_storms = self.storms[train_mask]
+
+        X_train = X.reindex(train_storms, level="storm")
+        y_train = y.reindex(train_storms, level="storm")
+        X_test = X.reindex(test_storms, level="storm")
+        y_test = y.reindex(test_storms, level="storm")
+
+        return TRAIN(X_train, y_train), TEST(X_test, y_test)
 
     def subset_data(self, X):
 
@@ -145,19 +151,7 @@ class StormSubsetter(BaseEstimator, TransformerMixin):
         return X_storms
 
 
-def get_min_y_storms(y, storm_labels=None):
-    def _get_min_y(y, storm_labels, i):
-        idx = storm_labels == i
-        return np.amin(y[idx], where=~np.isnan(y[idx]), initial=0)
-
-    unique_storms = np.unique(storm_labels)
-
-    min_y_iter = (_get_min_y(y, storm_labels, i) for i in unique_storms)
-    min_y = np.fromiter(min_y_iter, dtype=np.float32, count=unique_storms.shape[0])
-
-    return min_y
-
-
+# DELETE
 def split_data_storms(
     X, y, stormtimes_path, test_size=0.2, test_storms=None, threshold=None
 ):
@@ -205,7 +199,22 @@ def split_data_ts(X, y, test_size=0.2):
     X_train, X_test = _split(X)
     y_train, y_test = _split(y)
 
-    Train = namedtuple("Train", ["X", "y"])
-    Test = namedtuple("Test", ["X", "y"])
+    return TRAIN(X_train, y_train), TEST(X_test, y_test)
 
-    return Train(X_train, y_train), Test(X_test, y_test)
+
+if __name__ == "__main__":
+    # Test
+
+    from src.preprocessing.loading import load_solar_wind, load_symh
+
+    X = load_solar_wind(end="2012-12-31")
+    y = load_symh(end="2012-12-31")
+    splitter = StormSplitter("data/stormtimes.csv")
+
+    storm_labels = splitter.get_storm_labels(y)
+
+    threshold = -100
+    train, test = splitter.train_test_split(X, y, test_size=5, threshold=threshold)
+    assert np.all(test.y.groupby(level="storm").min() < threshold)
+
+    print("Passed!")
