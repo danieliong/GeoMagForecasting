@@ -45,6 +45,8 @@ def load_data(cfg, start, end):
 
     return features_df, target_df
 
+def split_data_storms(X, y, test_size=.2):
+    pass
 
 def split_data(X, y, cfg):
     # QUESTION: Should I use lead time in splitting?
@@ -84,24 +86,6 @@ def split_data(X, y, cfg):
     Test = namedtuple('Test', ['X', 'y'])
 
     return Train(X_train, y_train), Test(X_test, y_test)
-
-
-# QUESTION: Should I compute lagged features here?
-# QUESTION: Pass in clone of feature processor for transformer_y?
-# def compute_lagged_features(X, y, cfg, transformer_y=None, processor=None):
-
-#     if processor is None:
-#         # Transform lagged y same way as other solar wind features
-#         processor = LaggedFeaturesProcessor(transformer_y=transformer_y,
-#                                             lag=cfg.lag,
-#                                             exog_lag=cfg.exog_lag,
-#                                             lead=cfg.lead)
-#         processor.fit(X, y)
-
-#     # NOTE: fitted transformer is an attribute in processor
-#     X_lagged, y_target = processor.transform(X, y)
-
-#     return X_lagged, y_target, processor
 
 
 @hydra.main(config_path="../configs/preprocessing", config_name="config")
