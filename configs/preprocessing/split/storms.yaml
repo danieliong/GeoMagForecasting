@@ -1,0 +1,8 @@
+# @package _group_
+
+by_storms: true
+test_size: 5
+storm_times: data/stormtimes.csv
+test_storms: null
+threshold: -100
+threshold_less_than: true
