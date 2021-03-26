@@ -15,12 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 class Resampler(TransformerMixin):
-    def __init__(self,
-                 freq="T",
-                 label="right",
-                 func="mean",
-                 verbose=True,
-                 **kwargs):
+    def __init__(
+        self,
+        freq="T",
+        label="right",
+        func="mean",
+        time_col="times",
+        verbose=True,
+        **kwargs,
+    ):
         """Scikit-learn Wrapper for Pandas resample method
 
 
@@ -41,12 +44,35 @@ class Resampler(TransformerMixin):
         self.freq = freq
         self.label = label
         self.func = func
+        self.time_col = time_col
         self.verbose = verbose
         self.kwargs = kwargs
 
-    @staticmethod
-    def _get_freq(X):
-        return to_offset(pd.infer_freq(X.index))
+    def _get_freq_multi_idx(self, X):
+        def _get_freq_one_storm(x):
+            # Infer freq for one storm
+            times = x.index.get_level_values(self.time_col)
+            return to_offset(pd.infer_freq(times))
+
+        # Infer frequency within each storm and get unique frequencies
+        freqs = X.groupby(level=0).apply(_get_freq_one_storm).unique()
+
+        # If there is only one unique frequency
+        if len(freqs) == 1:
+            return freqs[0]
+        else:
+            return None
+
+    def _get_freq(self, X):
+        # HACK: Better way might be to resample before splitting but then the resampler
+        # will not be part of the pipeline
+        # TODO: Figure this out later.
+        if isinstance(X.index, pd.MultiIndex):
+            freq = self._get_freq_multi_idx(X)
+        else:
+            freq = to_offset(pd.infer_freq(X.index))
+
+        return freq
 
     def fit(self, X, y=None):
 
@@ -61,18 +87,27 @@ class Resampler(TransformerMixin):
     def transform(self, X, y=None):
 
         X_freq = self._get_freq(X)
+        logger.debug("Frequency: %s", X_freq)
         assert X_freq == self.X_freq_, "X does not have the correct frequency."
 
-        if X_freq is None:
-            X = X.resample(self.freq, label=self.label,
-                           **self.kwargs).apply(self.func)
-        elif self.freq > X_freq:
-            X = X.resample(self.freq, label=self.label,
-                           **self.kwargs).apply(self.func)
+        if X_freq is None or self.freq > X_freq:
+            if isinstance(X.index, pd.MultiIndex):
+                X = (
+                    X.groupby(level="storm")
+                    .resample(
+                        self.freq, label=self.label, level=self.time_col, **self.kwargs
+                    )
+                    .apply(self.func)
+                )
+            else:
+                X = X.resample(self.freq, label=self.label, **self.kwargs).apply(
+                    self.func
+                )
         else:
             if self.verbose:
-                logger.debug(f"Specified frequency ({self.freq}) is <= data "
-                             + f"frequency ({X_freq}). Resampling is ignored.")
+                logger.debug(
+                    f"Specified frequency ({self.freq}) is <= data frequency ({X_freq}). Resampling is ignored."
+                )
 
         return X
 
@@ -81,12 +116,9 @@ class Resampler(TransformerMixin):
 
 
 class Interpolator(TransformerMixin):
-    def __init__(self,
-                 method="linear",
-                 axis=0,
-                 limit_direction="both",
-                 limit=15,
-                 **kwargs):
+    def __init__(
+        self, method="linear", axis=0, limit_direction="both", limit=15, **kwargs
+    ):
         """Scikit-learn wrapper for Pandas interpolate method
         """
 
@@ -100,12 +132,34 @@ class Interpolator(TransformerMixin):
         # For compatibility only
         return self
 
+    def _transform_multi_idx(self, X):
+
+        if isinstance(X, pd.DataFrame):
+            _interpolate = pd.DataFrame.interpolate
+        elif isinstance(X, pd.Series):
+            _interpolate = pd.Series.interpolate
+
+        X = X.groupby(level="storm").apply(
+            _interpolate,
+            method=self.method,
+            axis=self.axis,
+            limit_direction=self.limit_direction,
+            **self.kwargs,
+        )
+
+        return X
+
     def transform(self, X, y=None):
 
-        X = X.interpolate(method=self.method,
-                          axis=self.axis,
-                          limit_direction=self.limit_direction,
-                          **self.kwargs)
+        if isinstance(X.index, pd.MultiIndex):
+            X = self._transform_multi_idx(X)
+        else:
+            X = X.interpolate(
+                method=self.method,
+                axis=self.axis,
+                limit_direction=self.limit_direction,
+                **self.kwargs,
+            )
 
         return X
 
@@ -158,8 +212,7 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
 
         if isinstance(X, pd.Series):
             assert X.name == self.name_
-            X_ = self.transformer.inverse_transform(X.to_numpy().reshape(
-                -1, 1))
+            X_ = self.transformer.inverse_transform(X.to_numpy().reshape(-1, 1))
             X_pd = pd.Series(X_.flatten(), name=self.name_, index=X.index)
         elif isinstance(X, pd.DataFrame):
             assert X.columns == self.columns_
@@ -169,40 +222,7 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
         return X_pd
 
 
-class StormSubsetter(BaseEstimator, TransformerMixin):
-    def __init__(self, times_path):
-        self.times_path = times_path
-
-
-    def _subset_storm(self, X, row):
-
-        storm_num, storm = row
-
-        if isinstance(X, pd.Series):
-            X = X.to_frame()
-
-        X_ = X.truncate(before=storm['start_time'],
-                        after=storm['end_time'])
-        X_['storm'] = storm_num
-
-        return X_
-
-    def fit(self, X, y=None):
-        path = to_absolute_path(self.times_path)
-        self.storm_times_ = pd.read_csv(path, index_col=0)
-
-        return self
-
-    def transform(self, X, y=None):
-        storm_iter = self.storm_times_.iterrows()
-        X_storms_iter = (self._subset_storm(X, row) for row in storm_iter)
-
-        X_storms = pd.concat(X_storms_iter)
-        X_storms.set_index([X_storms['storm'], X_storms.index], inplace=True)
-
-        return X_storms
-
-
+# TODO: Add this to pipeline
 def limited_change(x, factor=1.3):
     """Apply limited relative change to density and temperature by a set factor"""
 
@@ -219,6 +239,7 @@ def limited_change(x, factor=1.3):
     return out
 
 
+# TODO: Add this to pipeline
 def limited_change_speed(speed, density, change_down=30, change_ups=[50, 10]):
     """Apply limited relative change to speed according to density"""
 
@@ -230,11 +251,13 @@ def limited_change_speed(speed, density, change_down=30, change_ups=[50, 10]):
             out[i + 1] = d1  # assume persistence
         else:
             if density[i + 1] > density[i]:
-                out[i + 1] = np.nanmax((np.nanmin(
-                    (d2, d1 + change_ups[0])), d1 - change_down))
+                out[i + 1] = np.nanmax(
+                    (np.nanmin((d2, d1 + change_ups[0])), d1 - change_down)
+                )
             else:
-                out[i + 1] = np.nanmax((np.nanmin(
-                    (d2, d1 + change_ups[1])), d1 - change_down))
+                out[i + 1] = np.nanmax(
+                    (np.nanmin((d2, d1 + change_ups[1])), d1 - change_down)
+                )
     return out
 
 
@@ -258,29 +281,30 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
         if OmegaConf.is_none(self.cfg, "interpolate"):
             return None
         else:
-            logger.debug("Interpolating...")
+            logger.debug("Added interpolator to pipeline...")
 
         if isinstance(self.cfg.interpolate, bool):
             if self.cfg.interpolate:
                 self.pipeline_list.append(("interpolator", Interpolator()))
         elif OmegaConf.is_config(self.cfg.interpolate):
             self.pipeline_list.append(
-                ("interpolator", Interpolator(**self.cfg.interpolate)))
+                ("interpolator", Interpolator(**self.cfg.interpolate))
+            )
 
     def _add_resample(self):
         if OmegaConf.is_none(self.cfg, "resample"):
             return None
         else:
-           logger.debug("Resampling...")
+            logger.debug("Added resampler to pipeline...")
 
         if OmegaConf.is_config(self.cfg.resample):
-            self.pipeline_list.append(
-                ("resampler", Resampler(**self.cfg.resample)))
+            self.pipeline_list.append(("resampler", Resampler(**self.cfg.resample)))
 
     def _add_scaler_func(self):
 
-        if (OmegaConf.is_none(self.cfg, "scaler")
-                and OmegaConf.is_none(self.cfg, "func")):
+        if OmegaConf.is_none(self.cfg, "scaler") and OmegaConf.is_none(
+            self.cfg, "func"
+        ):
             return None
 
         # NOTE: scaler ignored when func is specified
@@ -293,22 +317,27 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
 
             func = _get_callable(func)
             inverse_func = _get_callable(inverse_func)
-            func_transformer = FunctionTransformer(func=func,
-                                                   inverse_func=inverse_func,
-                                                   **self.cfg.func.kwargs)
+            func_transformer = FunctionTransformer(
+                func=func, inverse_func=inverse_func, **self.cfg.func.kwargs
+            )
             self.pipeline_list.append(
-                ("func", PandasTransformer(transformer=func_transformer)))
+                ("func", PandasTransformer(transformer=func_transformer))
+            )
 
         elif scaler is not None:
             logger.debug(f"Scaling using scaler {scaler}...")
 
             scaler_callable = _get_callable(scaler)
             self.pipeline_list.append(
-                ("scaler",
-                 PandasTransformer(transformer=scaler_callable(),
-                                   **self.cfg.scaler.kwargs)))
+                (
+                    "scaler",
+                    PandasTransformer(
+                        transformer=scaler_callable(), **self.cfg.scaler.kwargs
+                    ),
+                )
+            )
         else:
-            logger.debug("scaler or func was not specified.")
+            logger.debug("Scaler or func was not specified.")
 
     def _add_filter(self):
 
@@ -320,16 +349,6 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
             # TODO
             pass
 
-    def _add_subset_storms(self):
-
-        if OmegaConf.is_none(self.cfg, "subset_storms"):
-            return None
-
-        logger.debug("Adding storm subsetter to pipeline...")
-        storm_subsetter = StormSubsetter(self.cfg.subset_storms.times_path)
-        self.pipeline_list.append(("storm_subsetter", storm_subsetter))
-
-
     def create_pipeline(self):
         # NOTE: Choose order here.
 
@@ -337,7 +356,6 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
         with open_dict(self.cfg):
             self._add_resample()
             self._add_interpolate()
-            self._add_subset_storms()
             self._add_scaler_func()
 
         if self.pipeline_list is not None:
