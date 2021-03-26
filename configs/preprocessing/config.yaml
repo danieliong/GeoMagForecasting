@@ -1,14 +1,14 @@
 # @package _global_
 
 defaults:
-  - target: supermag
+  - target: symh
   - features: solar_wind
-  - split: ts
+  - split: timeseries
 
 hydra:
   verbose: true
   run:
-    dir: outputs/${hydra.job.name}/features=${features.name},target=${target.name}/${hydra.job.override_dirname}/
+    dir: outputs/${hydra.job.name}/features-${features.name}/target-${target.name}/split-${split.method}/${hydra.job.override_dirname}/
   job:
     config:
       override_dirname:
@@ -17,6 +17,7 @@ hydra:
         exclude_keys:
           - target
           - features
+          - split
           - target.loading.data_dir
           - solar_wind.loading.path
 
@@ -34,3 +35,4 @@ output:
   train_target: "train_target.pkl"
   test_features: "test_features.pkl"
   test_target: "test_target.pkl"
+  group_labels: "group_labels.pkl"

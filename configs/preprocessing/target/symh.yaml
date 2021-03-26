@@ -2,9 +2,8 @@
 
 name: symh
 
-loading:
+load:
   path: data/symh.csv
-
 
 pipeline:
   interpolate: false

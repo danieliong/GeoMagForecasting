@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 
 import os
+import logging
 import pandas as pd
 import numpy as np
 
 from omegaconf import OmegaConf
+from hydra.utils import to_absolute_path
+from src import utils
+
+logger = logging.getLogger(__name__)
 
 COLS_TO_KEEP = [
     "times",
@@ -66,9 +71,10 @@ def load_solar_wind(
 
     """
 
-    # QUESTION: What is this for?
-    if working_dir is not None:
-        path = os.path.join(working_dir, path)
+    path = to_absolute_path(path)
+    # # QUESTION: What is this for?
+    # if working_dir is not None:
+    #     path = os.path.join(working_dir, path)
 
     # TODO: Add years arg to be consistent with load_supermag
 
@@ -102,7 +108,6 @@ def load_supermag(
     end="2019-12-31",
     horizontal=True,
     data_dir="data/raw",
-    working_dir=None,
     **read_kwargs,
 ):
     """Load SuperMag data
@@ -127,8 +132,9 @@ def load_supermag(
 
     """
 
-    if working_dir is not None:
-        data_dir = os.path.join(working_dir, data_dir)
+    data_dir = to_absolute_path(data_dir)
+    # if working_dir is not None:
+    #     data_dir = os.path.join(working_dir, data_dir)
 
     daterange = pd.date_range(start=start, end=end, freq="Y")
     years = list(daterange.year)
@@ -160,12 +166,12 @@ def load_symh(
     start="2010-01-01",
     end="2019-12-31",
     time_col="times",
-    working_dir=None,
     **kwargs,
 ):
 
-    if working_dir is not None:
-        path = os.path.join(working_dir, path)
+    path = to_absolute_path(path)
+    # if working_dir is not None:
+    #     path = os.path.join(working_dir, path)
 
     data = pd.read_csv(
         path, index_col=time_col, parse_dates=True, squeeze=True, dtype=np.float32
@@ -173,3 +179,27 @@ def load_symh(
     data = data.truncate(before=start, after=end)[:-1]
 
     return data
+
+
+def load_features(name, start, end, **kwargs):
+
+    logger.debug(f"Loading features: {name}")
+    logger.debug(f"Start={start}, End={end}")
+
+    if name == "solar_wind":
+        return load_solar_wind(**kwargs)
+    else:
+        raise utils.NotSupportedError(name, name_type="Features")
+
+
+def load_target(name, start, end, **kwargs):
+
+    logger.debug(f"Loading target: {name}")
+    logger.debug(f"Start={start}, End={end}")
+
+    if name == "supermag":
+        return load_supermag(**kwargs)
+    elif name == "symh":
+        return load_symh(**kwargs)
+    else:
+        raise utils.NotSupportedError(name, name_type="Target")

@@ -1,85 +1,33 @@
 #!/usr/bin/env python
 
 import hydra
-import pandas as pd
-import numpy as np
 import logging
 
-from collections import namedtuple
-from hydra.utils import get_original_cwd, to_absolute_path
-from omegaconf import DictConfig, OmegaConf
-from pandas.tseries.frequencies import to_offset
+from omegaconf import DictConfig
 
-# from loguru import logger
-
-# NOTE: Had to install src as package first
-from src.utils import is_pandas, is_numpy, save_output
-from src.preprocessing.loading import load_solar_wind, load_supermag, load_symh
+# Load functions from src
+# NOTE: Have to install src as package first
+from src.preprocessing.load import load_features, load_target
 from src.preprocessing.processors import HydraPipeline
-from src.preprocessing.split import split_data_storms, split_data_ts
+from src.preprocessing.split import split_data
+from src.utils import save_output
 
 logger = logging.getLogger(__name__)
 
 
-def load_data(cfg, start, end):
-    def _get_kwargs(name):
+def _delete_overlap_times(train, test):
+    # HACK: Delete overlap in times between train, test.
+    # Overlap occurs when we resample.
+    overlap_idx = train.index.intersection(test.index)
+    n_overlap = len(overlap_idx)
 
-        kwargs = OmegaConf.select(cfg, f"{name}.loading")
-        kwargs = OmegaConf.to_container(kwargs)
-        kwargs["start"] = start
-        kwargs["end"] = end
-
-        return kwargs
-
-    original_cwd = get_original_cwd()
-
-    if cfg.features.name == "solar_wind":
-        features_df = load_solar_wind(
-            working_dir=original_cwd, **_get_kwargs("features")
+    if n_overlap > 0:
+        logger.debug(
+            f"Dropping {n_overlap} overlap(s) in target times "
+            + "between train and test."
         )
+        test.drop(index=overlap_idx, inplace=True)
 
-    # assert len(cfg.target) == 1, "More than one target is specified."
-
-    if cfg.target.name == "supermag":
-        target_df = load_supermag(working_dir=original_cwd, **_get_kwargs("target"))
-    elif cfg.target.name == "symh":
-        target_df = load_symh(working_dir=original_cwd, **_get_kwargs("target"))
-
-    return features_df, target_df
-
-
-def split_data(X, y, cfg):
-
-    split = OmegaConf.select(cfg, "split")
-
-    if OmegaConf.is_none(split.test_size):
-        logger.debug("Test size not provided in configs. It will be set to .2.")
-        OmegaConf.update(split, "test_size", 0.2, merge=False)
-
-    if split.by_storms:
-        logger.debug("Splitting train, test by storms in %s", split.storm_times)
-
-        kwargs_list = [
-            "test_size",
-            "storm_times",
-            "test_storms",
-            "threshold",
-            "threshold_less_than",
-        ]
-        kwargs = OmegaConf.masked_copy(split, kwargs_list)
-
-        # Change storm times path to be relative to original working dir
-        storm_times = to_absolute_path(kwargs.storm_times)
-        OmegaConf.update(kwargs, "storm_times", storm_times)
-
-        train, test = split_data_storms(X, y, **kwargs)
-    else:
-        logger.debug("Splitting last %s\% for testing...", split.test_size * 100)
-
-        kwargs = OmegaConf.masked_copy(split, ["test_size"])
-        train, test = split_data_ts(X, y, **kwargs)
-
-    # Returns 2 named tuples with attributes X, y
     return train, test
 
 
@@ -89,62 +37,51 @@ def main(cfg: DictConfig) -> None:
     features. Pre-processed data is saved in data/interim
     """
 
-    logger.info("Loading data...")
-    features_df, target_df = load_data(cfg, start=cfg.start, end=cfg.end)
+    # Get needed parameters from Hydra
+    start = cfg.start
+    end = cfg.end
+    features_kwargs = cfg.features.load
+    target_kwargs = cfg.target.load
+    features_pipeline_cfg = cfg.features.pipeline
+    target_pipeline_cfg = cfg.target.pipeline
+    split_kwargs = cfg.split
+    output_paths = cfg.output
 
+    #######################################################################
+    logger.info("Loading data...")
+
+    features = load_features(cfg.features.name, start=start, end=end, **features_kwargs)
+    target = load_target(cfg.target.name, start=start, end=end, **target_kwargs)
+
+    #######################################################################
     logger.info("Splitting data...")
-    train, test = split_data(features_df, target_df, cfg)
+    train, test, groups = split_data(X=features, y=target, **split_kwargs)
     # NOTE: train, test are namedtuples with attributes X, y
 
+    #######################################################################
     logger.info("Transforming features...")
-    features_pipeline = HydraPipeline(cfg=cfg.features.pipeline)
+    features_pipeline = HydraPipeline(cfg=features_pipeline_cfg)
 
     X_train = features_pipeline.fit_transform(train.X)
     X_test = features_pipeline.transform(test.X)
 
-    # Note used after I created HydraPipeline
-    # if features_pipeline is None:
-    #     X_train = train.X
-    #     X_test = test.X
-    # else:
-    #     X_train = features_pipeline.fit_transform(train.X)
-    #     X_test = features_pipeline.transform(test.X)
-
     logger.info("Transforming target...")
-    target_pipeline = HydraPipeline(cfg=cfg.target.pipeline)
+    target_pipeline = HydraPipeline(cfg=target_pipeline_cfg)
 
     y_train = target_pipeline.fit_transform(train.y)
     y_test = target_pipeline.transform(test.y)
 
-    # Note used after I created HydraPipeline
-    # if target_pipeline is None:
-    #     y_train = train.y
-    #     y_test = test.y
-    # else:
-    #     y_train = target_pipeline.fit_transform(train.y)
-    #     y_test = target_pipeline.transform(test.y)
+    y_train, y_test = _delete_overlap_times(y_train, y_test)
 
-    # HACK: Delete overlap in y times.
-    # Overlap occurs when we resample.
-    y_overlap_idx = y_train.index.intersection(y_test.index)
-    n_overlap = len(y_overlap_idx)
-    if n_overlap > 0:
-        logger.debug(
-            f"Dropping {n_overlap} overlap(s) in target times "
-            + "between train and test."
-        )
-        y_test.drop(index=y_overlap_idx, inplace=True)
-
+    #######################################################################
     logger.info("Saving outputs...")
-    # FIXME: symlink needs to be changed to dir name since cfg.outline contains
-    # relative paths now.
-    # (Probably will delete symlink anyways)
-    save_output(features_pipeline, cfg.output.features_pipeline, symlink=cfg.symlink)
-    save_output(target_pipeline, cfg.output.target_pipeline, symlink=cfg.symlink)
-    save_output(X_train, cfg.output.train_features, symlink=cfg.symlink)
-    save_output(X_test, cfg.output.test_features, symlink=cfg.symlink)
-    save_output(y_train, cfg.output.train_target, symlink=cfg.symlink)
-    save_output(y_test, cfg.output.test_target, symlink=cfg.symlink)
+    save_output(features_pipeline, output_paths.features_pipeline)
+    save_output(target_pipeline, output_paths.target_pipeline)
+    save_output(X_train, output_paths.train_features)
+    save_output(X_test, output_paths.test_features)
+    save_output(y_train, output_paths.train_target)
+    save_output(y_test, output_paths.test_target)
+    save_output(groups, output_paths.group_labels)
 
 
 if __name__ == "__main__":

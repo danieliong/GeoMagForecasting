@@ -10,12 +10,22 @@ import numpy as np
 import logging
 
 from pathlib import Path
+
 # from loguru import logger
 from hydra.utils import to_absolute_path, get_original_cwd
 from omegaconf import OmegaConf
 from pandas.tseries.frequencies import to_offset
 
 logger = logging.getLogger(__name__)
+
+
+class NotSupportedError(Exception):
+    def __init__(self, name, name_type=None, add_message=None):
+        self.name = name
+        self.name_type = name_type
+        self.add_message = add_message
+        self.message = f"{self.name_type} {self.name} is not currently supported. {self.add_message}"
+        super().__init__(self.message)
 
 
 def is_pandas(x):
@@ -30,7 +40,7 @@ def get_freq(x):
     return to_offset(pd.infer_freq(x.index))
 
 
-def save_output(obj, path, symlink=True):
+def save_output(obj, path, symlink=False):
     """Save output object to path.
 
     Parameters
@@ -48,6 +58,11 @@ def save_output(obj, path, symlink=True):
     # TODO: symlink should be dir name to symlink from
     # TODO: Check that file extensions match object types
     # i.e. .npy -> numpy arrays, etc
+
+    # Do nothing if obj is None
+    # e.g. groups if split=timeseries
+    if obj is None:
+        return None
 
     orig_cwd = get_original_cwd()
     logger.debug(f"Original working directory is {orig_cwd}")
@@ -73,11 +88,11 @@ def save_output(obj, path, symlink=True):
     #             joblib.dump(obj, f)
     #         except:
     #             dill.dump(obj, f)
-            # try:
-            #     joblib.dump(obj, f)
-            # except (pickle.PickleError, pickle.PicklingError):
-            #     dill.dump(obj, f)
-            #     # FIXME: ModuleNotFound error when unpickling
+    # try:
+    #     joblib.dump(obj, f)
+    # except (pickle.PickleError, pickle.PicklingError):
+    #     dill.dump(obj, f)
+    #     # FIXME: ModuleNotFound error when unpickling
     else:
         with open(output_path, "wb") as f:
             dill.dump(obj, f)
@@ -91,8 +106,7 @@ def save_output(obj, path, symlink=True):
     if symlink:
         if orig_path.exists() or orig_path.is_symlink():
             logger.debug(f"Deleting {rel_orig_path} since it already exists...")
-            logger.debug(
-                f"{rel_orig_path} was a symlink to {os.readlink(orig_path)}.")
+            logger.debug(f"{rel_orig_path} was a symlink to {os.readlink(orig_path)}.")
 
             orig_path.unlink()
 
@@ -115,14 +129,12 @@ class Results:
 
         return dir_path
 
-
     def get_multirun_results(self):
 
         results_dir = self.get_multirun_dir()
         results = OmegaConf.load(f"{results_dir}/optimization_results.yaml")
 
         return results
-
 
     def get_best_dir(self):
 
@@ -140,7 +152,7 @@ class Results:
             best = False
             if overrides_path.exists():
                 overrides = OmegaConf.load(dir_path / overrides_path)
-                best = (set(overrides) == set(best_params_list))
+                best = set(overrides) == set(best_params_list)
 
             return best
 

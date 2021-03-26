@@ -1,4 +1,5 @@
 # @package _group_
 
-by_storms: false
+method: timeseries
+
 test_size: .2

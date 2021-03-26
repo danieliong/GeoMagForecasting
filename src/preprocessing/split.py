@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from src.utils import is_pandas
+from hydra.utils import to_absolute_path
 
 logger = logging.getLogger(__name__)
 
@@ -172,11 +173,14 @@ def split_data_storms(
     test_storms=None,
     threshold=None,
     threshold_less_than=True,
-    **kwargs
+    **kwargs,
 ):
     # Wrapper around StormSplitter.train_test_split
 
+    storm_times = to_absolute_path(storm_times)
+
     splitter = StormSplitter(storm_times)
+    groups = splitter.get_storm_labels(y)
     train, test = splitter.train_test_split(
         X,
         y,
@@ -186,7 +190,7 @@ def split_data_storms(
         threshold_less_than=threshold_less_than,
     )
 
-    return train, test
+    return train, test, groups
 
 
 def split_data_ts(X, y, test_size=0.2, **kwargs):
@@ -213,7 +217,21 @@ def split_data_ts(X, y, test_size=0.2, **kwargs):
     X_train, X_test = _split(X)
     y_train, y_test = _split(y)
 
-    return TRAIN(X_train, y_train), TEST(X_test, y_test)
+    # Groups is none
+    return TRAIN(X_train, y_train), TEST(X_test, y_test), None
+
+
+# Wrapper for the available split methods
+def split_data(method, X, y, test_size=0.2, **kwargs):
+
+    logger.debug(f"Splitting data by method: {method}")
+
+    if method == "storms":
+        return split_data_storms(X, y, test_size=test_size, **kwargs)
+    elif method == "timeseries":
+        return split_data_ts(X, y, test_size=test_size, **kwargs)
+    else:
+        raise ValueError(f"Split method {method} is not supported.")
 
 
 if __name__ == "__main__":

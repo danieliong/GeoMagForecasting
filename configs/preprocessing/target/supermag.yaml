@@ -2,7 +2,7 @@
 
 name: supermag
 
-loading:
+load:
   data_dir: data/supermag
   station: "OTT"
 

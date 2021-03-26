@@ -1,6 +1,7 @@
 # @package _group_
 
-by_storms: true
+method: storms
+
 test_size: 5
 storm_times: data/stormtimes.csv
 test_storms: null
