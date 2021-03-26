@@ -31,9 +31,10 @@ def load_data(cfg, start, end):
 
     original_cwd = get_original_cwd()
 
-    if 'solar_wind' in cfg:
-        features_df = load_solar_wind(working_dir=original_cwd,
-                                      **_get_kwargs("solar_wind"))
+    if cfg.features.name == "solar_wind":
+        features_df = load_solar_wind(
+            working_dir=original_cwd, **_get_kwargs("features")
+        )
 
     # assert len(cfg.target) == 1, "More than one target is specified."
 
@@ -104,7 +105,7 @@ def main(cfg: DictConfig) -> None:
     # NOTE: train, test are namedtuples with attributes X, y
 
     logger.info("Transforming features...")
-    features_pipeline = HydraPipeline(cfg=cfg.solar_wind.pipeline)
+    features_pipeline = HydraPipeline(cfg=cfg.features.pipeline)
 
     X_train = features_pipeline.fit_transform(train.X)
     X_test = features_pipeline.transform(test.X)

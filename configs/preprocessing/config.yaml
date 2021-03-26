@@ -5,8 +5,9 @@ defaults:
   - features: solar_wind
 
 hydra:
+  verbose: true
   run:
-    dir: outputs/${hydra.job.name}/features=${solar_wind.name},target=${target.name}/${hydra.job.override_dirname}/
+    dir: outputs/${hydra.job.name}/features=${features.name},target=${target.name}/${hydra.job.override_dirname}/
   job:
     config:
       override_dirname:
