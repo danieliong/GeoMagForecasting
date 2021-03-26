@@ -50,16 +50,24 @@ class StormSplitter:
 
     def _threshold_storms(self, y, n_storms, threshold, threshold_less_than):
 
-        min_y = y.groupby(level="storm").min()
+        y_groupby = y.groupby(level="storm")
 
         if threshold_less_than:
+            logger.debug("Test storms will be chosen such that min y < %s", threshold)
+            min_y = y_groupby.min()
             mask = min_y < threshold
+            storms_threshold = min_y[mask.values].index
         else:
-            mask = min_y > threshold
+            logger.debug("Test storms will be chosen such that max y > %s", threshold)
+            max_y = y_groupby.max()
+            mask = max_y > threshold
+            storms_threshold = max_y[mask.values].index
 
-        storms_threshold = min_y[mask.values].index
         n_threshold = len(storms_threshold)
 
+        # XXX
+        # If # of storms that meet threshold is less than number of test storms
+        # to sample, then set number of test storms to # of threshold storms
         if n_threshold < n_storms:
             n_storms = n_threshold
             logger.debug(
@@ -67,6 +75,7 @@ class StormSplitter:
                 n_storms,
             )
 
+        # Randomly sample thresholded storms
         test_storms = np.random.choice(storms_threshold, size=n_storms, replace=False)
 
         return test_storms
@@ -130,8 +139,12 @@ class StormSplitter:
                     y, n_test, threshold, threshold_less_than
                 )
 
+        logger.debug("There are %s test storms.", len(test_storms))
+
         train_mask = ~self.storms.isin(test_storms)
         train_storms = self.storms[train_mask]
+
+        logger.debug("There are %s train storms.", len(train_storms))
 
         X_train = X.reindex(train_storms, level="storm")
         y_train = y.reindex(train_storms, level="storm")
@@ -151,32 +164,33 @@ class StormSplitter:
         return X_storms
 
 
-# DELETE
 def split_data_storms(
-    X, y, stormtimes_path, test_size=0.2, test_storms=None, threshold=None
+    X,
+    y,
+    test_size=0.2,
+    storm_times="data/stormtimes.csv",
+    test_storms=None,
+    threshold=None,
+    threshold_less_than=True,
+    **kwargs
 ):
+    # Wrapper around StormSplitter.train_test_split
 
-    subsetter = StormSubsetter(stormtimes_path)
-    # X_storms = subsetter.subset_data(X)
-    # y_storms = subsetter.subset_data(y)
+    splitter = StormSplitter(storm_times)
+    train, test = splitter.train_test_split(
+        X,
+        y,
+        test_size=test_size,
+        test_storms=test_storms,
+        threshold=threshold,
+        threshold_less_than=threshold_less_than,
+    )
 
-    # TODO: Remove storms with too many NAs
-
-    if test_storms is not None:
-        pass
-    elif threshold is not None:
-        pass
-        # TODO: Get test_storms
-    else:
-        # TODO: Get test_storms
-        n_test = int(round(test_size * subsetter.n_storms))
-
-        test_storms = subsetter.get_storm_labels(X)
-
-    return test_storms
+    return train, test
 
 
-def split_data_ts(X, y, test_size=0.2):
+def split_data_ts(X, y, test_size=0.2, **kwargs):
+    # NOTE: **kwargs is used to absorb unused keyword arguments from Hydra
 
     test_start_idx = round(y.shape[0] * (1 - test_size))
     test_start = y.index[test_start_idx]

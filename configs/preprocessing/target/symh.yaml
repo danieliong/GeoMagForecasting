@@ -20,5 +20,3 @@ pipeline:
     func: null
     inverse_func: null
     kwargs: null
-  subset_storms:
-    times_path: data/stormtimes.csv

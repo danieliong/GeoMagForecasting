@@ -3,6 +3,7 @@
 defaults:
   - target: supermag
   - features: solar_wind
+  - split: ts
 
 hydra:
   verbose: true
@@ -25,11 +26,6 @@ symlink: false
 
 start: 2010-01-01
 end: 2019-12-31
-
-split:
-  test_size: .2
-  by_storm: false
-  storms: null
 
 output:
   features_pipeline: "features_pipeline.pkl"

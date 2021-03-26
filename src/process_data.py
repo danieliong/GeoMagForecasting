@@ -6,15 +6,17 @@ import numpy as np
 import logging
 
 from collections import namedtuple
-from hydra.utils import get_original_cwd
+from hydra.utils import get_original_cwd, to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from pandas.tseries.frequencies import to_offset
+
 # from loguru import logger
 
 # NOTE: Had to install src as package first
 from src.utils import is_pandas, is_numpy, save_output
 from src.preprocessing.loading import load_solar_wind, load_supermag, load_symh
 from src.preprocessing.processors import HydraPipeline
+from src.preprocessing.split import split_data_storms, split_data_ts
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +26,8 @@ def load_data(cfg, start, end):
 
         kwargs = OmegaConf.select(cfg, f"{name}.loading")
         kwargs = OmegaConf.to_container(kwargs)
-        kwargs['start'] = start
-        kwargs['end'] = end
+        kwargs["start"] = start
+        kwargs["end"] = end
 
         return kwargs
 
@@ -39,54 +41,46 @@ def load_data(cfg, start, end):
     # assert len(cfg.target) == 1, "More than one target is specified."
 
     if cfg.target.name == "supermag":
-        target_df = load_supermag(working_dir=original_cwd,
-                                  **_get_kwargs("target"))
+        target_df = load_supermag(working_dir=original_cwd, **_get_kwargs("target"))
     elif cfg.target.name == "symh":
         target_df = load_symh(working_dir=original_cwd, **_get_kwargs("target"))
 
     return features_df, target_df
 
-def split_data_storms(X, y, test_size=.2):
-    pass
 
 def split_data(X, y, cfg):
-    # QUESTION: Should I use lead time in splitting?
 
-    params = OmegaConf.select(cfg, "split")
+    split = OmegaConf.select(cfg, "split")
 
-    if OmegaConf.is_none(params.test_size):
-        logger.debug(
-            "Test size not provided in configs. It will be set to .2.")
-        test_size = .2
+    if OmegaConf.is_none(split.test_size):
+        logger.debug("Test size not provided in configs. It will be set to .2.")
+        OmegaConf.update(split, "test_size", 0.2, merge=False)
+
+    if split.by_storms:
+        logger.debug("Splitting train, test by storms in %s", split.storm_times)
+
+        kwargs_list = [
+            "test_size",
+            "storm_times",
+            "test_storms",
+            "threshold",
+            "threshold_less_than",
+        ]
+        kwargs = OmegaConf.masked_copy(split, kwargs_list)
+
+        # Change storm times path to be relative to original working dir
+        storm_times = to_absolute_path(kwargs.storm_times)
+        OmegaConf.update(kwargs, "storm_times", storm_times)
+
+        train, test = split_data_storms(X, y, **kwargs)
     else:
-        test_size = params.test_size
+        logger.debug("Splitting last %s\% for testing...", split.test_size * 100)
 
-    test_start_idx = round(y.shape[0] * (1 - test_size))
-    test_start = y.index[test_start_idx]
-    one_sec = to_offset('S')
+        kwargs = OmegaConf.masked_copy(split, ["test_size"])
+        train, test = split_data_ts(X, y, **kwargs)
 
-    def _split(x):
-        if is_pandas(x):
-            x_train, x_test = x.loc[:test_start], x.loc[test_start:]
-
-            # HACK: Remove overlaps if there are any
-            overlap = x_train.index.intersection(x_test.index)
-            x_test.drop(index=overlap, inplace=True)
-        else:
-            raise TypeError("x must be a pandas DataFrame or series.")
-
-        # FIXME: Data is split before processed so it looks like there is time
-        # overlap if times are resampled
-
-        return x_train, x_test
-
-    X_train, X_test = _split(X)
-    y_train, y_test = _split(y)
-
-    Train = namedtuple('Train', ['X', 'y'])
-    Test = namedtuple('Test', ['X', 'y'])
-
-    return Train(X_train, y_train), Test(X_test, y_test)
+    # Returns 2 named tuples with attributes X, y
+    return train, test
 
 
 @hydra.main(config_path="../configs/preprocessing", config_name="config")
@@ -96,9 +90,7 @@ def main(cfg: DictConfig) -> None:
     """
 
     logger.info("Loading data...")
-    features_df, target_df = load_data(cfg,
-                                       start=cfg.start,
-                                       end=cfg.end)
+    features_df, target_df = load_data(cfg, start=cfg.start, end=cfg.end)
 
     logger.info("Splitting data...")
     train, test = split_data(features_df, target_df, cfg)
@@ -137,26 +129,23 @@ def main(cfg: DictConfig) -> None:
     y_overlap_idx = y_train.index.intersection(y_test.index)
     n_overlap = len(y_overlap_idx)
     if n_overlap > 0:
-        logger.debug(f"Dropping {n_overlap} overlap(s) in target times "
-                     + "between train and test.")
+        logger.debug(
+            f"Dropping {n_overlap} overlap(s) in target times "
+            + "between train and test."
+        )
         y_test.drop(index=y_overlap_idx, inplace=True)
-
 
     logger.info("Saving outputs...")
     # FIXME: symlink needs to be changed to dir name since cfg.outline contains
     # relative paths now.
     # (Probably will delete symlink anyways)
-    save_output(features_pipeline,
-                cfg.output.features_pipeline,
-                symlink=cfg.symlink)
-    save_output(target_pipeline,
-                cfg.output.target_pipeline,
-                symlink=cfg.symlink)
+    save_output(features_pipeline, cfg.output.features_pipeline, symlink=cfg.symlink)
+    save_output(target_pipeline, cfg.output.target_pipeline, symlink=cfg.symlink)
     save_output(X_train, cfg.output.train_features, symlink=cfg.symlink)
     save_output(X_test, cfg.output.test_features, symlink=cfg.symlink)
     save_output(y_train, cfg.output.train_target, symlink=cfg.symlink)
     save_output(y_test, cfg.output.test_target, symlink=cfg.symlink)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
