@@ -3,6 +3,7 @@
 name: solar_wind
 
 load:
+  # Keyword arguments for load_solar_wind
   path: data/omni_2010-2019.csv.gz
   time_col: "times"
   features:
@@ -25,6 +26,7 @@ load:
     - "z_gse"
 
 pipeline:
+  # Arguments for HydraPipeline
   interpolate: True
   # interpolate:
   #   method: linear

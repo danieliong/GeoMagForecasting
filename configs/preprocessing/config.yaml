@@ -29,6 +29,7 @@ start: 2010-01-01
 end: 2019-12-31
 
 output:
+  # Paths to save output in output directory
   features_pipeline: "features_pipeline.pkl"
   target_pipeline: "target_pipeline.pkl"
   train_features: "train_features.pkl"

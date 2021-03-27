@@ -4,6 +4,7 @@ defaults:
   - hydra/sweeper: nevergrad
   - hydra/launcher: submitit_slurm
   - model: xgboost
+  - cv: timeseries
 
 hydra:
   sweep:
@@ -22,34 +23,33 @@ hydra:
   #   handlers:
   #   - file
 
-
-
+# TODO: Change these to numbers  
 lag: "H"
 exog_lag: "H"
 lead: "H"
 
 features: solar_wind
-target: supermag
+target: symh
+split: ${cv.method}
+
+# TODO: Figure out how to specify overrrides nicer
 overrides: ''
 
+
 # DON'T OVERRIDE/CHANGE
-inputs:
-  dir: outputs/process_data/features=${features},target=${target}/${overrides}
-  features_pipeline: "features_pipeline.pkl"
-  target_pipeline: "target_pipeline.pkl"
-  train_features: "train_features.pkl"
-  train_target: "train_target.pkl"
-  test_features: "test_features.pkl"
-  test_target: "test_target.pkl"
-
-
-split:
-  # Use sklearn's TimeSeriesSplit
-  method: "timeseries"
-  n_splits: 5
-  # test_size: .2 # Needs to be int here
-
-metric: "rmse"
+load:
+  # Keyword arguments for load_processed_data, load_processors in utils
+  inputs_dir: outputs/process_data/features-${features}/target-${target}/split-${split}/${overrides}
+  paths:
+    features_pipeline: "features_pipeline.pkl"
+    target_pipeline: "target_pipeline.pkl"
+    train_features: "train_features.pkl"
+    train_target: "train_target.pkl"
+    test_features: "test_features.pkl"
+    test_target: "test_target.pkl"
+    group_labels: "group_labels.pkl"
 
 # Inverse transform before computing metrics
 inverse_transform: true
+
+metric: "rmse"

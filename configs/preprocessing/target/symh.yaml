@@ -3,9 +3,11 @@
 name: symh
 
 load:
+  # Keyword arugments for load_symh
   path: data/symh.csv
 
 pipeline:
+  # Arguments for HydraPipeline
   interpolate: false
   resample:
     freq: '5T'

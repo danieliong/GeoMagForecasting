@@ -1,0 +1,7 @@
+# @package _group_
+
+method: "storms"
+
+init_params:
+  # Contains keyword arguments for initializing GroupKFold
+  n_splits: 5

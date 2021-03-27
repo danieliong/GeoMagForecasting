@@ -1,0 +1,10 @@
+# @package _group_
+
+method: "timeseries"
+
+init_params:
+  # Contains keyword arguments for initializing TimeSeriesSplit
+  n_splits: 5
+  max_train_size: none
+  test_size: none
+  gap: 0
