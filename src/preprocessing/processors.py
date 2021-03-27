@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import logging
+import functools
+import itertools
 
 # from loguru import logger
 from pandas.tseries.frequencies import to_offset
@@ -48,6 +50,7 @@ class Resampler(TransformerMixin):
         self.verbose = verbose
         self.kwargs = kwargs
 
+    # TODO: Replace with the one in utils later.
     def _get_freq_multi_idx(self, X):
         def _get_freq_one_storm(x):
             # Infer freq for one storm
@@ -222,6 +225,26 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
         return X_pd
 
 
+# INCOMPLETE
+class SolarWindPropagator(BaseEstimator, TransformerMixin):
+    def __init__(self, position_cols=["x_gse", "y_gse", "z_gse"], delete_cols=True):
+        self.position_cols = position_cols
+        self.delete_cols = delete_cols
+
+    def fit(self, X, y=None):
+        # TODO: Check if satellite positions are in columns
+        return self
+
+    def transform(self, X):
+        # TODO
+
+        if self.delete_cols:
+            logger.debug("Dropping satellite position columns...")
+            X = X.drop(columns=self.position_cols)
+
+        return X
+
+
 # TODO: Add this to pipeline
 def limited_change(x, factor=1.3):
     """Apply limited relative change to density and temperature by a set factor"""
@@ -270,41 +293,102 @@ def _get_callable(obj_str):
     return obj
 
 
+def _delete_df_cols(X, cols, errors="ignore", **kwargs):
+    return X.drop(columns=cols, errors=errors)
+
+
 class HydraPipeline(BaseEstimator, TransformerMixin):
     def __init__(self, cfg):
+        # TODO: Change this to take general arguments to make it more general.
         self.cfg = cfg
         self.pipeline_list = []
 
         # NOTE: Add new method for each processing step
 
-    def _add_interpolate(self):
-        if OmegaConf.is_none(self.cfg, "interpolate"):
+    def _param_in_cfg(self, param):
+        with open_dict(self.cfg):
+            return not OmegaConf.is_none(self.cfg, param)
+
+    def add_step(self, name, transformer):
+        self.pipeline_list.append((name, transformer))
+
+    # TODO: Modify pipeline steps below to return transformer
+    def pipeline_step(param, return_transformer=True):
+        # Decorator for pipeline step helper functions
+        # param should be the param in config file
+        def check_param_exists(func):
+            # Ignores func and returns None if param is not in self.cfg
+            @functools.wraps(func)
+            def wrapped_func(inst):
+                if inst._param_in_cfg(param):
+                    with open_dict(inst.cfg):
+                        logger.debug(f"Adding {param} to pipeline...")
+                        # Get params from cfg and add it as first argument in func
+                        params = OmegaConf.select(inst.cfg, param)
+                        if return_transformer:
+                            transformer = func(inst, params)
+                            inst.add_step(param, transformer)
+                        else:
+                            return func(inst, params)
+                else:
+                    logger.debug(f"{param} not in configs")
+                    return None
+
+            return wrapped_func
+
+        return check_param_exists
+
+    @pipeline_step("delete_cols")
+    def _add_delete_cols(self, params):
+
+        cols_to_delete = list(itertools.chain(*params))
+        delete_cols_transformer = FunctionTransformer(
+            _delete_df_cols, kw_args={"cols": cols_to_delete}
+        )
+
+        if len(cols_to_delete) == 0:
             return None
         else:
-            logger.debug("Added interpolator to pipeline...")
+            return delete_cols_transformer
 
-        if isinstance(self.cfg.interpolate, bool):
-            if self.cfg.interpolate:
-                self.pipeline_list.append(("interpolator", Interpolator()))
-        elif OmegaConf.is_config(self.cfg.interpolate):
-            self.pipeline_list.append(
-                ("interpolator", Interpolator(**self.cfg.interpolate))
-            )
+    @pipeline_step("interpolate")
+    def _add_interpolate(self, params):
 
-    def _add_resample(self):
-        if OmegaConf.is_none(self.cfg, "resample"):
-            return None
-        else:
-            logger.debug("Added resampler to pipeline...")
+        if isinstance(params, bool):
+            if params:
+                return Interpolator()
+                # self.pipeline_list.append(("interpolator", Interpolator()))
+        elif OmegaConf.is_config(params):
+            return Interpolator(**params)
+            # self.pipeline_list.append(("interpolator", Interpolator(**params)))
 
-        if OmegaConf.is_config(self.cfg.resample):
-            self.pipeline_list.append(("resampler", Resampler(**self.cfg.resample)))
+    @pipeline_step("resample")
+    def _add_resample(self, params):
+
+        if OmegaConf.is_config(params):
+            return Resampler(**params)
+            # self.pipeline_list.append(("resampler", Resampler(**params)))
+
+    @pipeline_step("filter", return_transformer=False)
+    def _add_filter(self, params):
+
+        if params.type == "limited_change":
+            logger.debug("Filter type: %s", params.type)
+            # INCOMPLETE
+            pass
+
+    @pipeline_step("propagate")
+    def _add_propagate(self, params):
+        # INCOMPLETE
+
+        kwargs = self.cfg.propagate if self.cfg.propagate is not None else {}
+        return SolarWindPropagator(**kwargs)
+        # self.pipeline_list.append(("propagator", SolarWindPropagator(**kwargs)))
 
     def _add_scaler_func(self):
+        # NOTE: Can't use pipeline_step decorator on this
 
-        if OmegaConf.is_none(self.cfg, "scaler") and OmegaConf.is_none(
-            self.cfg, "func"
-        ):
+        if not self._param_in_cfg("scaler") and not self._param_in_cfg("func"):
             return None
 
         # NOTE: scaler ignored when func is specified
@@ -320,43 +404,31 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
             func_transformer = FunctionTransformer(
                 func=func, inverse_func=inverse_func, **self.cfg.func.kwargs
             )
-            self.pipeline_list.append(
-                ("func", PandasTransformer(transformer=func_transformer))
-            )
+            transformer = PandasTransformer(transformer=func_transformer)
+            self.add_step("func", transformer)
 
         elif scaler is not None:
             logger.debug(f"Scaling using scaler {scaler}...")
 
             scaler_callable = _get_callable(scaler)
-            self.pipeline_list.append(
-                (
-                    "scaler",
-                    PandasTransformer(
-                        transformer=scaler_callable(), **self.cfg.scaler.kwargs
-                    ),
-                )
+            transformer = PandasTransformer(
+                transformer=scaler_callable(), **self.cfg.scaler.kwargs
             )
+            self.add_step("scaler", transformer)
         else:
             logger.debug("Scaler or func was not specified.")
 
-    def _add_filter(self):
-
-        if OmegaConf.is_none(self.cfg, "filter"):
-            return None
-
-        if self.cfg.filter.type == "limited_change":
-            logger.debug("Filtering using filter {self.filter.type}...")
-            # TODO
-            pass
-
     def create_pipeline(self):
-        # NOTE: Choose order here.
-
         logger.debug("Creating pipeline...")
-        with open_dict(self.cfg):
-            self._add_resample()
-            self._add_interpolate()
-            self._add_scaler_func()
+
+        # NOTE: Choose order here.
+        # params is added as argument in pipeline_steps decorator
+        self._add_resample()
+        self._add_filter()
+        self._add_interpolate()
+        self._add_propagate()
+        self._add_delete_cols()
+        self._add_scaler_func()
 
         if self.pipeline_list is not None:
             pipeline = Pipeline(self.pipeline_list)
