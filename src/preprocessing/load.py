@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
-import os
 import logging
 import pandas as pd
 import numpy as np
 
+from pathlib import Path
 from omegaconf import OmegaConf
 from hydra.utils import to_absolute_path
 from src import utils
@@ -203,3 +203,48 @@ def load_target(name, start, end, **kwargs):
         return load_symh(**kwargs)
     else:
         raise utils.NotSupportedError(name, name_type="Target")
+
+
+def load_processed_data(name, inputs_dir, paths: dict, must_exist=True):
+
+    inputs_dir = Path(inputs_dir)
+    rel_path = inputs_dir / paths[name]
+    path = Path(to_absolute_path(rel_path))
+    ext = path.suffix
+
+    if not path.exists():
+        if must_exist:
+            raise ValueError(f"{path} does not exist.")
+        # Mainly used for when cv=timeseries in fit_models
+        return None
+
+    if ext == ".npy":
+        processed_data = np.load(path)
+    elif ext == ".pkl":
+        processed_data = pd.read_pickle(path)
+    else:
+        raise utils.NotSupportedError(ext, name_type="Extension")
+
+    return processed_data
+
+
+def load_processor(name, inputs_dir, paths: dict):
+
+    inputs_dir = Path(inputs_dir)
+    rel_path = inputs_dir / paths[name]
+    path = Path(to_absolute_path(rel_path))
+    ext = path.suffix
+
+    with open(path, "rb") as f:
+        if ext == ".pkl":
+            import dill
+
+            processor = dill.load(f)
+        elif ext == ".joblib":
+            import joblib
+
+            processor = joblib.load(f)
+        else:
+            raise utils.NotSupportedError(ext, name_type="Extension")
+
+    return processor

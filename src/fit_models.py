@@ -55,12 +55,12 @@ def compute_lagged_features(cfg,
 
     # Load processed data
     if train:
-        X = load_inputs("train_features", cfg, type="data")
-        y = load_inputs("train_target", cfg, type="data")
+        X = load_processed_data(name="train_features", **load_kwargs)
+        X = load_processed_data(name="train_features", **load_kwargs)
+        y = load_processed_data(name="train_target", **load_kwargs)
     else:
-        X = load_inputs("test_features", cfg, type="data")
-        y = load_inputs("test_target", cfg, type="data")
-
+        X = load_processed_data(name="test_features", **load_kwargs)
+        y = load_processed_data(name="test_target", **load_kwargs)
 
     # Load features pipeline
     # QUESTION: What if this is really big?
@@ -68,7 +68,7 @@ def compute_lagged_features(cfg,
     # Resampler is in the pipeline. Fortunately, Resampler doesn't do anything if
     # freq is < data's freq. Find a better way to handle this.
     # IDEA: Remove Resampler?
-    transformer_y = clone(load_inputs("features_pipeline", cfg, type="processor"))
+    transformer_y = clone(load_processor(name="features_pipeline", **load_kwargs))
     # TODO: Delete Resampler in pipeline
     # It is okay for now because feature freq is probably < target freq.
 
@@ -116,11 +116,10 @@ def inv_transform_targets(y, ypred, cfg):
 
     inverse_transform = OmegaConf.select(cfg, "inverse_transform")
 
-    if inverse_transform:
-        logger.debug("Inverse transforming y and predictions...")
-        target_pipeline = load_inputs("target_pipeline", cfg, type="processor")
-        y = target_pipeline.inverse_transform(y)
-        ypred = target_pipeline.inverse_transform(ypred)
+    logger.debug("Inverse transforming y and predictions...")
+    target_pipeline = load_processor(name="target_pipeline", **load_kwargs)
+    y = target_pipeline.inverse_transform(y)
+    ypred = target_pipeline.inverse_transform(ypred)
 
     return y, ypred
 
