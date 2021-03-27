@@ -62,6 +62,7 @@ def get_freq(X):
 
 
 def has_storm_index(x):
+    # Returns True if x has a pd MultiIndex with level named 'storm'
 
     if not isinstance(x, (pd.Series, pd.DataFrame)):
         return False
@@ -73,22 +74,30 @@ def has_storm_index(x):
     return False
 
 
-def _apply_storm(func, x_tuple, y_tuple=None, **kwargs):
+def _apply_storm(func, x_tuple, y_tuple=None, keep_storm_index=False, **kwargs):
+    # Helper function for apply_storms
+    # Apply func to one storm
 
     x_storm = x_tuple[0]
-    x = x_tuple[1].droplevel("storm")
+    if not keep_storm_index:
+        x = x_tuple[1].droplevel("storm")
+    else:
+        x = x_tuple[1]
 
     if y_tuple is None:
         return func(x, **kwargs)
     else:
         y_storm = y_tuple[0]
         assert x_storm == y_storm
-        y = y_tuple[1].droplevel("storm")
+        if not keep_storm_index:
+            y = y_tuple[1].droplevel("storm")
+        else:
+            y = y_tuple[1]
 
         return func(x, y, **kwargs)
 
 
-def apply_storms(func, X, y=None, check=True, **kwargs):
+def apply_storms(func, X, y=None, check=True, keep_storm_index=False, **kwargs):
     # Apply func to each storm and combine results
 
     # QUESTION: What if only one has MultiIndex?
@@ -101,12 +110,17 @@ def apply_storms(func, X, y=None, check=True, **kwargs):
 
     X_groupby = X.groupby(level="storm")
     if y is None:
-        apply_iter = (_apply_storm(func, x_tuple, **kwargs) for x_tuple in X_groupby)
+        apply_iter = (
+            _apply_storm(func, x_tuple, keep_storm_index=keep_storm_index, **kwargs)
+            for x_tuple in X_groupby
+        )
     else:
         y_groupby = y.groupby(level="storm")
 
         apply_iter = (
-            _apply_storm(func, x_tuple, y_tuple, **kwargs)
+            _apply_storm(
+                func, x_tuple, y_tuple, keep_storm_index=keep_storm_index, **kwargs
+            )
             for x_tuple, y_tuple in zip(X_groupby, y_groupby)
         )
 
