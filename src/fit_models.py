@@ -9,15 +9,18 @@ from src.models import get_model
 from hydra.utils import to_absolute_path
 from omegaconf import OmegaConf
 from pathlib import Path
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.model_selection import TimeSeriesSplit, GroupKFold
 from sklearn.metrics import mean_squared_error
 from sklearn.base import clone
 
+from src import utils
 from src.preprocessing.lag_processor import LaggedFeaturesProcessor
+from src.preprocessing.load import load_processed_data, load_processor
 
 logger = logging.getLogger(__name__)
 
 
+# DELETE
 def load_inputs(name, cfg, type="data"):
 
     params = cfg.inputs
@@ -38,18 +41,21 @@ def load_inputs(name, cfg, type="data"):
         with open(abs_path, "rb") as f:
             if ext == ".pkl":
                 import dill
+
                 inputs = dill.load(f)
             elif ext == ".joblib":
                 import joblib
+
                 inputs = joblib.load(f)
 
     return inputs
 
 
-def compute_lagged_features(cfg,
-                            train=True,
-                            processor=None):
+def compute_lagged_features(
+    lag, exog_lag, lead, train=True, processor=None, **load_kwargs
+):
 
+    # QUESTION: What if there is no processor?
     if not train and processor is None:
         raise ValueError("processor must be specified if train=False")
 
@@ -74,10 +80,9 @@ def compute_lagged_features(cfg,
 
     if processor is None:
         # Transform lagged y same way as other solar wind features
-        processor = LaggedFeaturesProcessor(transformer_y=transformer_y,
-                                            lag=cfg.lag,
-                                            exog_lag=cfg.exog_lag,
-                                            lead=cfg.lead)
+        processor = LaggedFeaturesProcessor(
+            transformer_y=transformer_y, lag=lag, exog_lag=exog_lag, lead=lead,
+        )
         processor.fit(X, y)
 
     # NOTE: fitted transformer is an attribute in processor
@@ -86,21 +91,29 @@ def compute_lagged_features(cfg,
     return X_lagged, y_target, processor
 
 
-def get_cv(y, cfg):
+def get_cv_split(y, method, init_params, **load_kwargs):
 
-
-    split_params = OmegaConf.to_container(cfg.split)
-    method = split_params.pop("method")
+    # Returns None if group_labels doesn't exist (e.g. for cv=timeseries)
+    groups = load_processed_data(name="group_labels", **load_kwargs)
 
     if method == "timeseries":
-        splitter = TimeSeriesSplit(**split_params)
+        splitter = TimeSeriesSplit(**init_params)
+    elif method == "group":
+        splitter = GroupKFold(**init_params)
 
-    # split = splitter.split(y)
+    split = splitter.split(y, groups=groups)
 
-    return splitter
+    return split
 
 
+# TODO: Add more general version to utils later.
 def convert_pred_to_pd(ypred, y):
+
+    if isinstance(ypred, (pd.Series, pd.DataFrame)):
+        logger.debug(
+            "Predictions are already pandas objects and will not be converted."
+        )
+        return ypred
 
     if isinstance(ypred, np.ndarray):
         # NOTE: This should be okay but check to make sure later.
@@ -112,9 +125,7 @@ def convert_pred_to_pd(ypred, y):
     return ypred
 
 
-def inv_transform_targets(y, ypred, cfg):
-
-    inverse_transform = OmegaConf.select(cfg, "inverse_transform")
+def inv_transform_targets(y, ypred, **load_kwargs):
 
     logger.debug("Inverse transforming y and predictions...")
     target_pipeline = load_processor(name="target_pipeline", **load_kwargs)
@@ -124,17 +135,14 @@ def inv_transform_targets(y, ypred, cfg):
     return y, ypred
 
 
-def compute_metric(y, ypred, cfg):
+def compute_metric(y, ypred, metric):
     # QUESTION: Should we inverse transform y and ypred before
     # computing metrics?
 
-    metric = OmegaConf.select(cfg, "metric")
     if metric is None:
+        logger.debug("Metric not given. Defaulting to rmse.")
         # Default to rmse
         metric = "rmse"
-
-    # NOTE: We switched to inverse transforming targets before computing metric
-    # y, ypred = inv_transform_targets(y, ypred, cfg)
 
     logger.debug(f"Computing {metric}...")
 
@@ -142,6 +150,8 @@ def compute_metric(y, ypred, cfg):
         metric_val = mean_squared_error(y, ypred, squared=False)
     elif metric == "mse":
         metric_val = mean_squared_error(y, ypred, squared=True)
+    else:
+        raise utils.NotSupportedError(metric, name_type="Metric")
 
     logger.info(f"{metric}: {metric_val}")
 
@@ -152,14 +162,24 @@ def compute_metric(y, ypred, cfg):
 @hydra.main(config_path="../configs/models", config_name="config")
 def main(cfg):
 
+    load_kwargs = cfg.load
+    cv_init_params = cfg.cv.init_params
+
     model_name = cfg.model
     pred_path = cfg.outputs.predictions
+    lag = cfg.lag
+    exog_lag = cfg.exog_lag
+    lead = cfg.lead
+    inverse_transform = cfg.inverse_transform
+    metric = cfg.metric
 
     logger.info("Loading training data and computing lagged features...")
-    X_train, y_train, processor = compute_lagged_features(cfg, train=True)
+    X_train, y_train, processor = compute_lagged_features(
+        lag=lag, exog_lag=exog_lag, lead=lead, train=True, **load_kwargs
+    )
 
     logger.info("Getting CV split...")
-    cv = get_cv(y_train, cfg)
+    cv = get_cv_split(y_train, cv_init_params, **load_kwargs)
 
     logger.info(f"Fitting model {model_name}...")
     model = get_model(model_name, cfg)
@@ -170,20 +190,22 @@ def main(cfg):
 
     logger.info("Loading testing data and computing lagged features...")
     X_test, y_test, _ = compute_lagged_features(
-        cfg, train=False, processor=processor)
+        lag=lag, exog_lag=exog_lag, lead=lead, processor=processor, **load_kwargs
+    )
 
     logger.info("Computing predictions...")
     ypred = model.predict(X_test)
     ypred = convert_pred_to_pd(ypred, y_test)
-    y_test, ypred = inv_transform_targets(y_test, ypred, cfg)
+    if inverse_transform:
+        y_test, ypred = inv_transform_targets(y_test, ypred, **load_kwargs)
 
-    metric_val = compute_metric(y_test, ypred, cfg)
+    metric_val = compute_metric(y_test, ypred, metric=metric)
 
     logger.info("Saving predictions...")
-    ypred.to_pickle(pred_path)
+    utils.save_output(ypred, pred_path)
 
     return metric_val
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
