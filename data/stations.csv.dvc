@@ -1,0 +1,4 @@
+outs:
+- md5: 28533c2ec6e84b0e4c07cd7a9b35f14e
+  size: 11001
+  path: stations.csv
