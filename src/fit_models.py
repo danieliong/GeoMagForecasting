@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import logging
 
-from src.models import get_model
 from hydra.utils import to_absolute_path
 from omegaconf import OmegaConf
 from pathlib import Path
@@ -98,16 +97,34 @@ def compute_lagged_features(
 def get_cv_split(y, method, init_params, **load_kwargs):
 
     # Returns None if group_labels doesn't exist (e.g. for cv=timeseries)
-    groups = load_processed_data(name="group_labels", **load_kwargs)
+    # groups = load_processed_data(name="group_labels", **load_kwargs)
 
     if method == "timeseries":
         splitter = TimeSeriesSplit(**init_params)
-    elif method == "group":
+        groups = None
+    elif method == "storms":
         splitter = GroupKFold(**init_params)
+        groups = load_processed_data(
+            name="group_labels", must_exist=True, **load_kwargs
+        )
+
+        # Reindex times within each storm
+        # Cannot just reindex groups with y index directly because there are
+        # overlapping storms
+        groups = pd.concat(
+            (
+                groups[groups[STORM_LEVEL] == storm].reindex(y.storms.get(storm).index)
+                for storm in y.storms.level
+            )
+        )
+
+        assert len(groups) == len(
+            y
+        ), f"Length of groups ({len(groups)}) does not match length of y ({len(y)})"
 
     split = splitter.split(y, groups=groups)
 
-    return split
+    return list(split)
 
 
 # TODO: Add more general version to utils later.
@@ -167,6 +184,8 @@ def compute_metric(y, ypred, metric):
 def main(cfg):
 
     load_kwargs = cfg.load
+
+    cv_method = cfg.cv.method
     cv_init_params = cfg.cv.init_params
 
     model_name = cfg.model
@@ -177,13 +196,16 @@ def main(cfg):
     inverse_transform = cfg.inverse_transform
     metric = cfg.metric
 
+    # FIXME: Don't compute if it has already been computed.
+    # Maybe split this step into multiple?
     logger.info("Loading training data and computing lagged features...")
     X_train, y_train, processor = compute_lagged_features(
         lag=lag, exog_lag=exog_lag, lead=lead, train=True, **load_kwargs
     )
+    utils.save_output(processor, "")
 
-    logger.info("Getting CV split...")
-    cv = get_cv_split(y_train, cv_init_params, **load_kwargs)
+    logger.info(f"Getting CV split for '{cv_method}' method...")
+    cv = get_cv_split(y_train, cv_method, cv_init_params, **load_kwargs)
 
     logger.info(f"Fitting model {model_name}...")
     model = get_model(model_name, cfg)

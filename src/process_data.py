@@ -56,7 +56,8 @@ def main(cfg: DictConfig) -> None:
 
     #######################################################################
     logger.info("Splitting data...")
-    train, test, groups = split_data(X=features, y=target, **split_kwargs)
+    # TODO: Remove returning groups in split_data
+    train, test, _ = split_data(X=features, y=target, **split_kwargs)
     # NOTE: train, test are namedtuples with attributes X, y
 
     #######################################################################
@@ -74,6 +75,20 @@ def main(cfg: DictConfig) -> None:
 
     y_train, y_test = _delete_overlap_times(y_train, y_test)
 
+    # FIXME: For some reason, X_test's storm index is not sorted.
+    if split_kwargs.method == "storms":
+        if not X_train.storms.level.equals(y_train.storms.level):
+            X_train.sort_index(level="storm", inplace=True)
+            y_train.sort_index(level="storm", inplace=True)
+
+        if not X_test.storms.level.equals(y_test.storms.level):
+            X_test.sort_index(level="storm", inplace=True)
+            y_test.sort_index(level="storm", inplace=True)
+
+    if _has_storm_index(y_train):
+        groups = y_train.index.to_frame(index=False).set_index("times")
+        save_output(groups, output_paths.group_labels)
+
     #######################################################################
     logger.info("Saving outputs...")
     save_output(features_pipeline, output_paths.features_pipeline)
@@ -82,7 +97,6 @@ def main(cfg: DictConfig) -> None:
     save_output(X_test, output_paths.test_features)
     save_output(y_train, output_paths.train_target)
     save_output(y_test, output_paths.test_target)
-    save_output(groups, output_paths.group_labels)
 
 
 if __name__ == "__main__":
