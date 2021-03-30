@@ -1,31 +1,45 @@
 #!/usr/bin/env python
 
 import itertools
+import logging
 import numpy as np
 import pandas as pd
 
-from pandas.tseries.frequencies import to_offset
-from src.utils import get_freq
 from functools import partial
+from sklearn.base import TransformerMixin
+from pandas.tseries.frequencies import to_offset
+
+from src.utils import get_freq
+from src.storm_utils import (
+    iterate_storms_method,
+    apply_storms,
+    StormAccessor,
+    StormIndexAccessor,
+    _has_storm_index,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class LaggedFeaturesProcessor:
     """
-    (Not exactly a sklearn transformer)
     NOTE: X, y don't necessarily have the same freq so we can't just pass one
     combined dataframe.
 
-    HACK: Not a proper scikit learn transformer. fit and transform take X and y.
+    XXX: Not a proper scikit learn transformer. fit and transform take X and y.
 
     """
-    def __init__(self,
-                 lag="0T",
-                 exog_lag="H",
-                 lead="0T",
-                 transformer_y=None,
-                 njobs=1,
-                 verbose=False,
-                 **transformer_y_kwargs):
+
+    def __init__(
+        self,
+        lag="0T",
+        exog_lag="H",
+        lead="0T",
+        transformer_y=None,
+        njobs=1,
+        verbose=False,
+        **transformer_y_kwargs,
+    ):
         self.lag = lag
         self.exog_lag = exog_lag
         self.lead = lead
@@ -43,7 +57,8 @@ class LaggedFeaturesProcessor:
         # - pd Dataframe
         pass
 
-    def _compute_feature(self, target_time, X, y):
+    # TODO: Use storm accessor wherever possible
+    def _compute_feature(self, target_index, X, y):
         """Computes ARX features to predict target at a specified time
            `target_time`.
 

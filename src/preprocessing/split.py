@@ -9,6 +9,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from src.utils import is_pandas
 from hydra.utils import to_absolute_path
 
+from src.storm_utils import StormAccessor, StormIndexAccessor
+
 logger = logging.getLogger(__name__)
 
 

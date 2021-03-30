@@ -4,7 +4,6 @@ import os
 import pickle
 import joblib
 import dill
-import sklearn
 import pandas as pd
 import numpy as np
 import logging
@@ -59,75 +58,6 @@ def get_freq(X):
         freq = to_offset(pd.infer_freq(X.index))
 
     return freq
-
-
-def has_storm_index(x):
-    # Returns True if x has a pd MultiIndex with level named 'storm'
-
-    if not isinstance(x, (pd.Series, pd.DataFrame)):
-        return False
-
-    if isinstance(x.index, pd.MultiIndex):
-        if "storm" in x.index.names:
-            return True
-
-    return False
-
-
-def _apply_storm(func, x_tuple, y_tuple=None, keep_storm_index=False, **kwargs):
-    # Helper function for apply_storms
-    # Apply func to one storm
-
-    x_storm = x_tuple[0]
-    if not keep_storm_index:
-        x = x_tuple[1].droplevel("storm")
-    else:
-        x = x_tuple[1]
-
-    if y_tuple is None:
-        return func(x, **kwargs)
-    else:
-        y_storm = y_tuple[0]
-        assert x_storm == y_storm
-        if not keep_storm_index:
-            y = y_tuple[1].droplevel("storm")
-        else:
-            y = y_tuple[1]
-
-        return func(x, y, **kwargs)
-
-
-def apply_storms(func, X, y=None, check=True, keep_storm_index=False, **kwargs):
-    # Apply func to each storm and combine results
-
-    # QUESTION: What if only one has MultiIndex?
-    # NOTE: Assuming both or neither have MultiIndex for now
-
-    if check:
-        assert has_storm_index(X) or has_storm_index(
-            y
-        ), "Neither X or y have storm index"
-
-    X_groupby = X.groupby(level="storm")
-    if y is None:
-        apply_iter = (
-            _apply_storm(func, x_tuple, keep_storm_index=keep_storm_index, **kwargs)
-            for x_tuple in X_groupby
-        )
-    else:
-        y_groupby = y.groupby(level="storm")
-
-        apply_iter = (
-            _apply_storm(
-                func, x_tuple, y_tuple, keep_storm_index=keep_storm_index, **kwargs
-            )
-            for x_tuple, y_tuple in zip(X_groupby, y_groupby)
-        )
-
-    storms = X.index.unique(level="storm")
-    res = pd.concat(apply_iter, keys=storms)
-
-    return res
 
 
 def save_output(obj, path, symlink=False):
