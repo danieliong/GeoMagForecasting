@@ -13,9 +13,13 @@ from sklearn.model_selection import TimeSeriesSplit, GroupKFold
 from sklearn.metrics import mean_squared_error
 from sklearn.base import clone
 
+from src import STORM_LEVEL
 from src import utils
+from src.models import get_model
 from src.preprocessing.lag_processor import LaggedFeaturesProcessor
 from src.preprocessing.load import load_processed_data, load_processor
+
+# from src.storm_utils import apply_storms
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +194,12 @@ def main(cfg):
 
     logger.info("Loading testing data and computing lagged features...")
     X_test, y_test, _ = compute_lagged_features(
-        lag=lag, exog_lag=exog_lag, lead=lead, processor=processor, **load_kwargs
+        lag=lag,
+        exog_lag=exog_lag,
+        lead=lead,
+        train=False,
+        processor=processor,
+        **load_kwargs,
     )
 
     logger.info("Computing predictions...")
