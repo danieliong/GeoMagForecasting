@@ -227,16 +227,32 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
 
 # INCOMPLETE
 class SolarWindPropagator(BaseEstimator, TransformerMixin):
-    def __init__(self, position_cols=["x_gse", "y_gse", "z_gse"], delete_cols=True):
+    def __init__(
+        self, position_cols=["x_gse", "y_gse", "z_gse"], delete_cols=True, force=False
+    ):
         self.position_cols = position_cols
         self.delete_cols = delete_cols
+        self.force = force
 
     def fit(self, X, y=None):
         # TODO: Check if satellite positions are in columns
+
+        if self.force:
+            assert all(col in X.columns for col in self.position_cols)
+
         return self
 
     def transform(self, X):
         # TODO
+
+        # Needed to transform lagged target the same way as solar wind
+        # TODO: Do this for filters also
+        if any(col not in X.columns for col in self.position_cols) and not self.force:
+            logger.debug(
+                "X doesn't contain satellite position columns. Ignoring SolarWindPropagator."
+            )
+            # Do nothing if X doesn't have position columns
+            return X
 
         if self.delete_cols:
             logger.debug("Dropping satellite position columns...")

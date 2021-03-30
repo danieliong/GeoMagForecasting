@@ -24,12 +24,7 @@ load:
     - "x_gse"
     - "y_gse"
     - "z_gse"
-    - "x_gse"
-    - "y_gse"
-    - "z_gse"
 
-position_cols: [ "x_gse", "y_gse", "z_gse" ]
-    
 pipeline:
   # Arguments for HydraPipeline
   interpolate:
@@ -56,9 +51,15 @@ pipeline:
       change_down: 30
       change_ups: [ 50, 10 ]
   propagate:
-    position_cols: ${features.position_cols}
+    position_cols:
+      - "x_gse"
+      - "y_gse"
+      - "z_gse"
   delete_cols:
-    - ${features.position_cols}
+    - "x_gse"
+    - "y_gse"
+    - "z_gse"
+
     
 
 # output_path: data/processed/solar_wind.pkl
