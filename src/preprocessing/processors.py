@@ -466,3 +466,9 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
             return X
         else:
             return self.pipeline_.transform(X)
+
+    def inverse_transform(self, X):
+        if self.pipeline_ is None:
+            return X
+        else:
+            return self.pipeline_.inverse_transform(X)
