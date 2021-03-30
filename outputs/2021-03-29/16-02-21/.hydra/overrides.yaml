@@ -1,0 +1,3 @@
+- cv=storms
+- kwargs.num_boost_round=10
+- kwargs.early_stopping_rounds=2
