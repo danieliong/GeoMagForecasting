@@ -2,10 +2,11 @@
 
 import logging
 import json
+import mlflow
+
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-import lightgbm as lgb
 
 from abc import ABC, abstractmethod
 from omegaconf import OmegaConf
@@ -14,8 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class HydraModel(ABC):
-
-    def __init__(self, cfg):
+    def __init__(self, cfg, mlflow=False):
 
         params = OmegaConf.select(cfg, "param")
         assert params is not None, "param must be provided in Hydra."
@@ -30,6 +30,8 @@ class HydraModel(ABC):
 
         outputs = OmegaConf.select(cfg, "outputs")
         self.outputs = OmegaConf.to_container(outputs)
+
+        self.mlflow = mlflow
 
         self.model = None
 
@@ -46,17 +48,46 @@ class HydraModel(ABC):
         pass
 
 
+class MLFlowXGBCallback(xgb.callback.TrainingCallback):
+    def __init__(self, cv=True):
+        self.cv = cv
+        self.run = mlflow.active_run()
+
+    def after_iteration(self, model, epoch, evals_log):
+        if not evals_log:
+            return False
+
+        if self.run is not None:
+            for data, metric in evals_log.items():
+                for metric_name, log in metric.items():
+                    if isinstance(log[-1], tuple):
+                        score = log[-1][0]
+                    else:
+                        score = log[-1]
+                    if self.cv:
+                        key = f"cv-{data}-{metric_name}"
+                    else:
+                        key = f"{data}-{metric_name}"
+                    mlflow.log_metric(key=key, value=score, step=epoch)
+        return False
+
+
 class HydraXGB(HydraModel):
+    def __init__(self, cfg, mlflow=True):
+        super().__init__(cfg, mlflow=mlflow)
 
-    def __init__(self, cfg):
-        super().__init__(cfg)
-
+        self.metrics = self.kwargs.pop("metrics", "rmse")
 
     def fit(self, X, y, cv=None):
 
-        num_boost_round = self.kwargs.pop('num_boost_round', 100)
-        early_stopping_rounds = self.kwargs.pop('early_stopping_rounds', 30)
-        metrics = self.kwargs.pop('metrics', "rmse")
+        num_boost_round = self.kwargs.pop("num_boost_round", 100)
+        early_stopping_rounds = self.kwargs.pop("early_stopping_rounds", 30)
+        # metrics = self.kwargs.pop("metrics", "rmse")
+
+        if self.mlflow:
+            callbacks = [MLFlowXGBCallback()]
+        else:
+            callbacks = None
 
         dtrain = xgb.DMatrix(X, label=y)
 
@@ -67,16 +98,20 @@ class HydraXGB(HydraModel):
                 folds=cv,
                 num_boost_round=num_boost_round,
                 early_stopping_rounds=early_stopping_rounds,
-                metrics=metrics)
+                metrics=self.metrics,
+                callbacks=callbacks,
+            )
 
-            metric = metrics[-1] if isinstance(metrics, list) else metrics
-            num_boost_round = np.argmin(self.cv_res_[f'test-{metric}-mean']) + 1
+            metric = (
+                self.metrics[-1] if isinstance(self.metrics, list) else self.metrics
+            )
+            num_boost_round = np.argmin(self.cv_res_[f"test-{metric}-mean"]) + 1
 
         self.model = xgb.train(
             params=self.params,
             dtrain=dtrain,
             num_boost_round=num_boost_round,
-            **self.kwargs
+            **self.kwargs,
         )
 
         return self
@@ -97,6 +132,9 @@ class HydraXGB(HydraModel):
             if self.outputs["cv_results"] is not None:
                 cv_res = pd.DataFrame(self.cv_res_)
                 cv_res.to_csv(self.outputs["cv_results"])
+
+                if self.mlflow:
+                    mlflow.log_artifact(self.outputs["cv_results"])
 
 
 # Dictionary with model name as keys and HydraModel class as value
