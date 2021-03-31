@@ -1,0 +1,55 @@
+# @package _global_
+
+# features: solar_wind
+# target: symh
+# split: storms 
+# overrides: ''
+
+defaults:
+  - target: symh
+  - features: solar_wind
+  - split: timeseries
+
+overrides: ''
+    
+lag: "H"
+exog_lag: "H"
+lead: "H"
+
+hydra:
+  verbose: true
+  run:
+    # Same dir as process_data
+    dir: outputs/processed_data/features-${features.name}/target-${target.name}/split-${split.method}/${overrides}
+
+  job:
+    config:
+      override_dirname:
+        kv_sep: "-"
+        item_sep: "_"
+        exclude_keys:
+          - target
+          - features
+          - split
+          - target.loading.data_dir
+          - features.loading.path
+    
+inputs:
+  absolute: false
+  paths:
+    features_pipeline: "features_pipeline.pkl"
+    target_pipeline: "target_pipeline.pkl"
+    train_features: "train_features.pkl"
+    train_target: "train_target.pkl"
+    test_features: "test_features.pkl"
+    test_target: "test_target.pkl"
+    group_labels: "group_labels.pkl"
+
+
+outputs:
+  output_dir: "lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}"
+  X_train: "X_train.npy"
+  y_train: "y_train.npy"
+  X_test: "X_test.npy"
+  y_test: "y_test.npy"
+  lag_processor: "lag_processor.joblib"

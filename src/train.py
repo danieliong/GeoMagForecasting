@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import logging
 
-from hydra.utils import to_absolute_path
+from hydra.utils import to_absolute_path, get_original_cwd
 from omegaconf import OmegaConf
 from pathlib import Path
 from sklearn.model_selection import TimeSeriesSplit, GroupKFold
@@ -54,6 +54,7 @@ def load_inputs(name, cfg, type="data"):
     return inputs
 
 
+# DELETE
 def compute_lagged_features(
     lag, exog_lag, lead, train=True, processor=None, **load_kwargs
 ):
@@ -104,23 +105,26 @@ def get_cv_split(y, method, init_params, **load_kwargs):
         groups = None
     elif method == "storms":
         splitter = GroupKFold(**init_params)
-        groups = load_processed_data(
-            name="group_labels", must_exist=True, **load_kwargs
-        )
+        # groups = load_processed_data(
+        #     name="group_labels", must_exist=True, **load_kwargs
+        # )
+
+        # NOTE: y should be a pandas object with storm index so set groups to be storm index
+        groups = y.storms.index
 
         # Reindex times within each storm
         # Cannot just reindex groups with y index directly because there are
         # overlapping storms
-        groups = pd.concat(
-            (
-                groups[groups[STORM_LEVEL] == storm].reindex(y.storms.get(storm).index)
-                for storm in y.storms.level
-            )
-        )
+        # groups = pd.concat(
+        #     (
+        #         groups[groups[STORM_LEVEL] == storm].reindex(y.storms.get(storm).index)
+        #         for storm in y.storms.level
+        #     )
+        # )
 
-        assert len(groups) == len(
-            y
-        ), f"Length of groups ({len(groups)}) does not match length of y ({len(y)})"
+        # assert len(groups) == len(
+        #     y
+        # ), f"Length of groups ({len(groups)}) does not match length of y ({len(y)})"
 
     split = splitter.split(y, groups=groups)
 
@@ -181,9 +185,13 @@ def compute_metric(y, ypred, metric):
 
 # NOTE: Make this return RMSE to use Nevergrad
 @hydra.main(config_path="../configs/models", config_name="config")
-def main(cfg):
+def train(cfg):
+
+    # XXX: Setting URI doesn't work unless I import inside main
+    import mlflow
 
     load_kwargs = cfg.load
+    inputs_dir = load_kwargs.inputs_dir
 
     cv_method = cfg.cv.method
     cv_init_params = cfg.cv.init_params
@@ -195,48 +203,89 @@ def main(cfg):
     lead = cfg.lead
     inverse_transform = cfg.inverse_transform
     metric = cfg.metric
+    # seed = cfg.seed
 
-    # FIXME: Don't compute if it has already been computed.
-    # Maybe split this step into multiple?
-    logger.info("Loading training data and computing lagged features...")
-    X_train, y_train, processor = compute_lagged_features(
-        lag=lag, exog_lag=exog_lag, lead=lead, train=True, **load_kwargs
-    )
-    utils.save_output(processor, "")
+    mlflow.set_experiment(cfg.experiment_name)
+    experiment = mlflow.get_experiment_by_name(cfg.experiment_name)
+    if cfg.experiment_name is not None:
+        logger.debug(f"MLFlow Experiment: {cfg.experiment_name}")
 
-    logger.info(f"Getting CV split for '{cv_method}' method...")
-    cv = get_cv_split(y_train, cv_method, cv_init_params, **load_kwargs)
+    orig_cwd = get_original_cwd()
+    tracking_uri = f"file://{orig_cwd}/mlruns"
+    mlflow.set_tracking_uri(tracking_uri)
+    logger.debug(f"MLFlow Tracking URI: {tracking_uri}")
 
-    logger.info(f"Fitting model {model_name}...")
-    model = get_model(model_name, cfg)
-    model.fit(X_train, y_train, cv=cv)
+    if model_name == "xgboost":
+        import mlflow.xgboost
 
-    logger.info("Saving model outputs...")
-    model.save_output()
+        logger.debug("Turning on xgboost MLFlow autologging...")
+        mlflow.xgboost.autolog()
 
-    logger.info("Loading testing data and computing lagged features...")
-    X_test, y_test, _ = compute_lagged_features(
-        lag=lag,
-        exog_lag=exog_lag,
-        lead=lead,
-        train=False,
-        processor=processor,
-        **load_kwargs,
-    )
+    # # Nest runs if train was run within another run
+    # if mlflow.active_run() is None:
+    #     nested = True
+    #     logger.debug("Nesting MLFlow runs...")
+    # else:
+    #     nested = False
 
-    logger.info("Computing predictions...")
-    ypred = model.predict(X_test)
-    ypred = convert_pred_to_pd(ypred, y_test)
-    if inverse_transform:
-        y_test, ypred = inv_transform_targets(y_test, ypred, **load_kwargs)
+    active_run = mlflow.active_run()
+    if active_run is None:
+        run_id = None
+    else:
+        run_id = active_run.info.run_id
+        logger.debug(f"Active run_id: {run_id}")
 
-    metric_val = compute_metric(y_test, ypred, metric=metric)
+    with mlflow.start_run(run_id=run_id, experiment_id=experiment.experiment_id):
 
-    logger.info("Saving predictions...")
-    utils.save_output(ypred, pred_path)
+        inputs_hydra_dir = Path(to_absolute_path(inputs_dir)) / ".hydra"
+        mlflow.log_artifacts(inputs_hydra_dir, artifact_path="inputs_configs")
+        mlflow.log_artifacts(".hydra", artifact_path="model_configs")
+
+        logger.info("Loading training data and computing lagged features...")
+        mlflow.log_params({"lag": lag, "exog_lag": exog_lag, "lead": lead})
+
+        X_train = load_processed_data("X_train", **load_kwargs)
+        y_train = load_processed_data("y_train", **load_kwargs)
+        X_test = load_processed_data("X_test", **load_kwargs)
+        y_test = load_processed_data("y_test", **load_kwargs)
+
+        n_train_obs, n_features = X_train.shape
+        n_test_obs, _ = y_test.shape
+        mlflow.log_params(
+            {
+                "n_train_obs": n_train_obs,
+                "n_test_obs": n_test_obs,
+                "n_features": n_features,
+            }
+        )
+
+        logger.info(f"Getting CV split for '{cv_method}' method...")
+        cv = get_cv_split(y_train, cv_method, cv_init_params, **load_kwargs)
+        mlflow.log_param("cv_method", cv_method)
+        mlflow.log_params(cv_init_params)
+
+        logger.info(f"Fitting model {model_name}...")
+        model = get_model(model_name, cfg)
+        model.fit(X_train, y_train, cv=cv)
+
+        # logger.info("Saving model outputs...")
+        # model.save_output()
+
+        logger.info("Computing predictions...")
+        ypred = model.predict(X_test)
+        ypred = convert_pred_to_pd(ypred, y_test)
+        if inverse_transform:
+            y_test, ypred = inv_transform_targets(y_test, ypred, **load_kwargs)
+
+        metric_val = compute_metric(y_test, ypred, metric=metric)
+        mlflow.log_metrics({metric: metric_val})
+
+        logger.info("Saving predictions...")
+        utils.save_output(ypred, pred_path)
+        mlflow.log_artifact(pred_path)
 
     return metric_val
 
 
 if __name__ == "__main__":
-    main()
+    train()
