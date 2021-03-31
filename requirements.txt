@@ -25,6 +25,8 @@ hydra-submitit-launcher
 # Needed to get rid of error in hydra
 omegaconf>=2.1.0dev21
 
+mlflow
+
 # Data processing
 numpy
 pandas

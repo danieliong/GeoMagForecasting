@@ -1,0 +1,21 @@
+# INCOMPLETE
+name: GeoMag Forecasting
+
+conda_env: environment.yml
+
+entry_points:
+  sweep:
+    parameters:
+      # model: {type: string, default: "xgboost"}
+      # cv: {type: string, default: "storms"}
+      seed: {type: int, default: 8686}
+      # lag: {type: string, default: "H"}
+      # exog_lag: {type: string, default: "H"}
+      # lead: {type: string, default: "H"}
+      # target: {type: string, default: "symh"}
+      # features: {type: string, default: "solar_wind"}
+    command: "python src/train.py --multirun seed={seed}"
+  tune:
+    command: "python src/tune_hyperparams.py"
+
+    
