@@ -35,6 +35,7 @@ split: ${cv.method}
 # TODO: Figure out how to specify overrrides nicer
 overrides: ''
 
+seed: 8686
 
 # DON'T OVERRIDE/CHANGE
 load:

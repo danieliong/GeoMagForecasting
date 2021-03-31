@@ -19,8 +19,9 @@ TEST = namedtuple("Test", ["X", "y"])
 
 
 class StormSplitter:
-    def __init__(self, times_path):
+    def __init__(self, times_path, seed=None):
         self.storm_times = pd.read_csv(times_path, index_col=0)
+        self.rng = np.random.default_rng(seed)
 
     @property
     def storms(self):
@@ -79,7 +80,7 @@ class StormSplitter:
             )
 
         # Randomly sample thresholded storms
-        test_storms = np.random.choice(storms_threshold, size=n_storms, replace=False)
+        test_storms = self.rng.choice(storms_threshold, size=n_storms, replace=False)
 
         return test_storms
 
@@ -135,7 +136,7 @@ class StormSplitter:
 
             if threshold is None:
                 # Choose test storms randomly
-                test_storms = np.random.choice(self.storms, size=n_test)
+                test_storms = self.rng.choice(self.storms, size=n_test)
             else:
                 # Choose test storms that cross threshold
                 test_storms = self._threshold_storms(
@@ -175,13 +176,14 @@ def split_data_storms(
     test_storms=None,
     threshold=None,
     threshold_less_than=True,
+    seed=None,
     **kwargs,
 ):
     # Wrapper around StormSplitter.train_test_split
 
     storm_times = to_absolute_path(storm_times)
 
-    splitter = StormSplitter(storm_times)
+    splitter = StormSplitter(storm_times, seed=seed)
     groups = splitter.get_storm_labels(y)
     train, test = splitter.train_test_split(
         X,
@@ -195,7 +197,7 @@ def split_data_storms(
     return train, test, groups
 
 
-def split_data_ts(X, y, test_size=0.2, **kwargs):
+def split_data_ts(X, y, test_size=0.2, seed=None, **kwargs):
     # NOTE: **kwargs is used to absorb unused keyword arguments from Hydra
 
     test_start_idx = round(y.shape[0] * (1 - test_size))
@@ -224,14 +226,14 @@ def split_data_ts(X, y, test_size=0.2, **kwargs):
 
 
 # Wrapper for the available split methods
-def split_data(method, X, y, test_size=0.2, **kwargs):
+def split_data(method, X, y, test_size=0.2, seed=None, **kwargs):
 
     logger.debug(f"Splitting data by method: {method}")
 
     if method == "storms":
-        return split_data_storms(X, y, test_size=test_size, **kwargs)
+        return split_data_storms(X, y, test_size=test_size, seed=seed, **kwargs)
     elif method == "timeseries":
-        return split_data_ts(X, y, test_size=test_size, **kwargs)
+        return split_data_ts(X, y, test_size=test_size, seed=seed, **kwargs)
     else:
         raise ValueError(f"Split method {method} is not supported.")
 

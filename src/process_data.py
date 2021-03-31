@@ -47,6 +47,8 @@ def main(cfg: DictConfig) -> None:
     target_pipeline_cfg = cfg.target.pipeline
     split_kwargs = cfg.split
     output_paths = cfg.output
+    seed = cfg.seed
+    logger.info(f"Random seed: {seed}")
 
     #######################################################################
     logger.info("Loading data...")
@@ -57,7 +59,7 @@ def main(cfg: DictConfig) -> None:
     #######################################################################
     logger.info("Splitting data...")
     # TODO: Remove returning groups in split_data
-    train, test, _ = split_data(X=features, y=target, **split_kwargs)
+    train, test, _ = split_data(X=features, y=target, seed=seed, **split_kwargs)
     # NOTE: train, test are namedtuples with attributes X, y
 
     #######################################################################
