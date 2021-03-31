@@ -241,6 +241,8 @@ def train(cfg):
         mlflow.log_artifacts(inputs_hydra_dir, artifact_path="inputs_configs")
         mlflow.log_artifacts(".hydra", artifact_path="model_configs")
 
+        mlflow.log_param("model", model_name)
+
         logger.info("Loading training data and computing lagged features...")
         mlflow.log_params({"lag": lag, "exog_lag": exog_lag, "lead": lead})
 
