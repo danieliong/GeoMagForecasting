@@ -4,16 +4,16 @@ model: xgboost
 
 # TODO: Find way to separate this into new file
 hydra:
-  launcher:
-    mem_gb: 15
-    cpus_per_task: 1
-    additional_parameters:
-      account: stats_dept1
+  # launcher:
+  #   mem_gb: 15
+  #   cpus_per_task: 1
+  #   additional_parameters:
+  #     account: stats_dept1
   sweeper:
     optim:
       optimizer: NGOpt
-      budget: 30
-      num_workers: 30
+      budget: 3
+      num_workers: 1
     parametrization:
       param.learning_rate:
         # init: 0.2
@@ -41,8 +41,8 @@ param:
   colsample_bytree: 0.8
 
 kwargs:
-  num_boost_round: 100
-  early_stopping_rounds: 30
+  num_boost_round: 30
+  early_stopping_rounds: 10
   metrics: "rmse"
 
 outputs:

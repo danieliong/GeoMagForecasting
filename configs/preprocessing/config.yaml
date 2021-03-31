@@ -3,12 +3,12 @@
 defaults:
   - target: symh
   - features: solar_wind
-  - split: timeseries
+  - split: storms
 
 hydra:
   verbose: true
   run:
-    dir: outputs/${hydra.job.name}/features-${features.name}/target-${target.name}/split-${split.method}/${hydra.job.override_dirname}/
+    dir: outputs/processed_data/features-${features.name}/target-${target.name}/split-${split.method}/${hydra.job.override_dirname}/
   job:
     config:
       override_dirname:
