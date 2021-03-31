@@ -130,10 +130,17 @@ class LaggedFeaturesProcessor:
         self.freq_y_ = get_freq(y)
 
         # Add ones to get number of features inclusive
-        n_lag = int(self.lag / self.freq_y_) + 1
+        if self.lag == to_offset("0T"):
+            n_lag = 0
+        else:
+            n_lag = int(self.lag / self.freq_y_) + 1
         logger.debug("# of lagged features: %s", n_lag)
 
-        n_exog_each_col = int((self.exog_lag / self.freq_X_)) + 1
+        if self.exog_lag == to_offset("0T"):
+            n_exog_each_col = 0
+        else:
+            n_exog_each_col = int((self.exog_lag / self.freq_X_)) + 1
+
         n_exog = n_exog_each_col * X.shape[1]
         logger.debug("# of exogeneous features: %s", n_exog)
 
