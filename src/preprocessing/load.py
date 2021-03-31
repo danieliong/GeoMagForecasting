@@ -72,7 +72,6 @@ def load_solar_wind(
     """
 
     path = to_absolute_path(path)
-    # # QUESTION: What is this for?
     # if working_dir is not None:
     #     path = os.path.join(working_dir, path)
 
@@ -205,11 +204,21 @@ def load_target(name, start, end, **kwargs):
         raise utils.NotSupportedError(name, name_type="Target")
 
 
-def load_processed_data(name, inputs_dir, paths: dict, must_exist=True):
+def load_processed_data(
+    name, paths: dict, inputs_dir=None, absolute=True, must_exist=True
+):
 
-    inputs_dir = Path(inputs_dir)
-    rel_path = inputs_dir / paths[name]
-    path = Path(to_absolute_path(rel_path))
+    if inputs_dir is None:
+        inputs_dir = Path(".")
+    else:
+        inputs_dir = Path(inputs_dir)
+
+    if absolute:
+        rel_path = inputs_dir / paths[name]
+        path = Path(to_absolute_path(rel_path))
+    else:
+        path = inputs_dir / paths[name]
+
     ext = path.suffix
 
     if not path.exists():
@@ -228,12 +237,25 @@ def load_processed_data(name, inputs_dir, paths: dict, must_exist=True):
     return processed_data
 
 
-def load_processor(name, inputs_dir, paths: dict):
+def load_processor(name, paths: dict, inputs_dir=None, absolute=True, must_exist=True):
 
-    inputs_dir = Path(inputs_dir)
-    rel_path = inputs_dir / paths[name]
-    path = Path(to_absolute_path(rel_path))
+    if inputs_dir is None:
+        inputs_dir = Path(".")
+    else:
+        inputs_dir = Path(inputs_dir)
+
+    if absolute:
+        rel_path = inputs_dir / paths[name]
+        path = Path(to_absolute_path(rel_path))
+    else:
+        path = inputs_dir / paths[name]
+
     ext = path.suffix
+
+    if not path.exists():
+        if must_exist:
+            raise ValueError(f"{path} does not exist.")
+        return None
 
     with open(path, "rb") as f:
         if ext == ".pkl":
