@@ -17,8 +17,7 @@ from src import utils
 from src.models import get_model
 from src.preprocessing.lag_processor import LaggedFeaturesProcessor
 from src.preprocessing.load import load_processed_data, load_processor
-
-# from src.storm_utils import apply_storms
+from src.storm_utils import StormIndexAccessor, StormAccessor
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +188,7 @@ def train(cfg):
 
     # XXX: Setting URI doesn't work unless I import inside main
     import mlflow
+    from src.storm_utils import StormIndexAccessor, StormAccessor
 
     load_kwargs = cfg.load
     inputs_dir = load_kwargs.inputs_dir
@@ -228,14 +228,14 @@ def train(cfg):
     # else:
     #     nested = False
 
-    active_run = mlflow.active_run()
-    if active_run is None:
-        run_id = None
-    else:
-        run_id = active_run.info.run_id
-        logger.debug(f"Active run_id: {run_id}")
+    # active_run = mlflow.active_run()
+    # if active_run is None:
+    #     run_id = None
+    # else:
+    #     run_id = active_run.info.run_id
+    #     logger.debug(f"Active run_id: {run_id}")
 
-    with mlflow.start_run(run_id=run_id, experiment_id=experiment.experiment_id):
+    with mlflow.start_run(experiment_id=experiment.experiment_id):
 
         inputs_hydra_dir = Path(to_absolute_path(inputs_dir)) / ".hydra"
         mlflow.log_artifacts(inputs_hydra_dir, artifact_path="inputs_configs")
