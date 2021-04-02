@@ -11,7 +11,7 @@ from src import utils
 
 logger = logging.getLogger(__name__)
 
-COLS_TO_KEEP = [
+OMNI_FEATURES = [
     "times",
     "b",
     "bx",
@@ -39,43 +39,30 @@ COLS_TO_KEEP = [
     "mach",
 ]
 
+ACE_FEATURES = [
+    "density",
+    "speed",
+    "temperature",
+    "bx",
+    "by",
+    "bz",
+    "bt",
+    "status_swepam",
+    "status_mag",
+]
 
-def load_solar_wind(
-    path="data/omni_2010-2019.csv.gz",
+
+def _load_solar_wind(
     start="2010-01-01",
     end="2019-12-31",
-    features=COLS_TO_KEEP,
+    path="data/omni_2010-2019.csv.gz",
+    features=OMNI_FEATURES,
     time_col="times",
-    working_dir=None,
     **kwargs,
 ):
-    """ Load solar wind data
-
-    Parameters
-    ----------
-    path: str
-        Path to solar wind data
-    features: list-like or None, default=None
-        List of features to load. If None, load all features in csv
-    time_col: str
-        Name of time column
-    working_dir : str or None
-        Absolute path to working directory that path is relative to.
-        (For use with Hydra because Hydra changes cwd to output dir.)
-    kwargs: Keyword arguments for pd.read_csv
-
-    Returns
-    -------
-    pd.DataFrame
-        Dataframe containing solar wind data
-
-    """
+    # ACE and OMNI are loaded the same way except with different paths and features
 
     path = to_absolute_path(path)
-    # if working_dir is not None:
-    #     path = os.path.join(working_dir, path)
-
-    # TODO: Add years arg to be consistent with load_supermag
 
     if features is not None:
         if OmegaConf.is_config(features):
@@ -101,10 +88,20 @@ def load_solar_wind(
     return data
 
 
-def load_supermag(
-    station,
+def load_features_omni(
+    path="data/omni_2010-2019.csv.gz", features=OMNI_FEATURES, **kwargs
+):
+    return _load_solar_wind(path=path, features=features, **kwargs)
+
+
+def load_features_ace(path="data/ace_2010-2019.csv", features=ACE_FEATURES, **kwargs):
+    return _load_solar_wind(path=path, features=features, **kwargs)
+
+
+def load_target_supermag(
     start="2010-01-01",
     end="2019-12-31",
+    station="OTT",
     horizontal=True,
     data_dir="data/raw",
     **read_kwargs,
@@ -132,8 +129,6 @@ def load_supermag(
     """
 
     data_dir = to_absolute_path(data_dir)
-    # if working_dir is not None:
-    #     data_dir = os.path.join(working_dir, data_dir)
 
     daterange = pd.date_range(start=start, end=end, freq="Y")
     years = list(daterange.year)
@@ -160,10 +155,10 @@ def load_supermag(
         return data
 
 
-def load_symh(
-    path="data/symh.csv",
+def load_target_symh(
     start="2010-01-01",
     end="2019-12-31",
+    path="data/symh.csv",
     time_col="times",
     **kwargs,
 ):
@@ -178,30 +173,6 @@ def load_symh(
     data = data.truncate(before=start, after=end)[:-1]
 
     return data
-
-
-def load_features(name, start, end, **kwargs):
-
-    logger.debug(f"Loading features: {name}")
-    logger.debug(f"Start={start}, End={end}")
-
-    if name == "solar_wind":
-        return load_solar_wind(**kwargs)
-    else:
-        raise utils.NotSupportedError(name, name_type="Features")
-
-
-def load_target(name, start, end, **kwargs):
-
-    logger.debug(f"Loading target: {name}")
-    logger.debug(f"Start={start}, End={end}")
-
-    if name == "supermag":
-        return load_supermag(**kwargs)
-    elif name == "symh":
-        return load_symh(**kwargs)
-    else:
-        raise utils.NotSupportedError(name, name_type="Target")
 
 
 def load_processed_data(

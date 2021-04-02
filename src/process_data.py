@@ -7,7 +7,7 @@ from omegaconf import DictConfig
 
 # Load functions from src
 # NOTE: Have to install src as package first
-from src.preprocessing.load import load_features, load_target
+from src.preprocessing.loader import DataLoader
 from src.preprocessing.processors import HydraPipeline
 from src.preprocessing.split import split_data
 from src.utils import save_output
@@ -41,6 +41,8 @@ def main(cfg: DictConfig) -> None:
     # Get needed parameters from Hydra
     start = cfg.start
     end = cfg.end
+    features = cfg.features.name
+    target = cfg.target.name
     features_kwargs = cfg.features.load
     target_kwargs = cfg.target.load
     features_pipeline_cfg = cfg.features.pipeline
@@ -53,8 +55,9 @@ def main(cfg: DictConfig) -> None:
     #######################################################################
     logger.info("Loading data...")
 
-    features = load_features(cfg.features.name, start=start, end=end, **features_kwargs)
-    target = load_target(cfg.target.name, start=start, end=end, **target_kwargs)
+    data_loader = DataLoader(start=start, end=end, features=features, target=target)
+    features = data_loader.load_features(**features_kwargs)
+    target = data_loader.load_features(**target_kwargs)
 
     #######################################################################
     logger.info("Splitting data...")
