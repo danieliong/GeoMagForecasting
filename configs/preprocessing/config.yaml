@@ -2,7 +2,7 @@
 
 defaults:
   - target: symh
-  - features: solar_wind
+  - features: omni
   - split: storms
 
 hydra:

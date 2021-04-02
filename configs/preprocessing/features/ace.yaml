@@ -1,29 +1,20 @@
 # @package _group_
 
-name: solar_wind
+
+name: ace
 
 load:
-  # Keyword arguments for load_solar_wind
-  path: data/omni_2010-2019.csv.gz
+  path: data/ace_2010-2019.csv.gz
   time_col: "times"
   features:
-    - "b"
+    - "density"
+    - "speed"
+    - "temperature"
     - "bx"
     - "by"
     - "bz"
-    - "vx_gse"
-    - "vy_gse"
-    - "vz_gse"
-    - "density"
-    - "temperature"
-    - "pressure"
-    - "e"
-    - "beta"
-    - "alfven_mach"
-    - "mach"
-    - "x_gse"
-    - "y_gse"
-    - "z_gse"
+    - "status_swepam"
+    - "status_mag"
 
 pipeline:
   # Arguments for HydraPipeline
@@ -51,6 +42,7 @@ pipeline:
       change_down: 30
       change_ups: [ 50, 10 ]
   propagate:
+    # TODO
     position_cols:
       - "x_gse"
       - "y_gse"
@@ -59,7 +51,5 @@ pipeline:
     - "x_gse"
     - "y_gse"
     - "z_gse"
-
-    
-
-# output_path: data/processed/solar_wind.pkl
+    - "status_swepam"
+    - "status_mag"
