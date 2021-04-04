@@ -44,8 +44,10 @@ pipeline:
       bz: [ -200, 200 ]
   filter:
     type: "limited_change"
+    speed_col: "speed"
     density_col: "density"
     temp_col: "temperature"
+    copy: True
     limited_change:
       factor: 1.3
       change_down: 30

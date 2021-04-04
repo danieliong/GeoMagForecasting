@@ -381,39 +381,80 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
         return X_
 
 
-# TODO: Add this to pipeline
-def limited_change_speed(speed, density, change_down=30, change_ups=[50, 10]):
-    """Apply limited relative change to speed according to density"""
+# INCOMPLETE
+class LimitedChangeFilter(BaseEstimator, TransformerMixin):
+    def __init__(
+        self,
+        change_down=30,
+        change_ups=[50, 10],
+        factor=1.3,
+        speed_col="speed",
+        density_col="speed",
+        temp_col="temperature",
+        copy=True,
+    ):
+        self.change_down = change_down
+        self.change_ups = change_ups
+        self.factor = factor
+        self.speed_col = speed_col
+        self.density_col = density_col
+        self.temp_col = temp_col
+        self.copy = copy
 
-    # QUESTION: Which velocity do I use?
+    def fit(self, X, y=None):
+        # For compatibility only
+        return self
 
-    out = speed.copy()
-    for i, (d1, d2) in enumerate(zip(out[:-1], out[1:])):
-        if np.isnan(d2):
-            out[i + 1] = d1  # assume persistence
+    def _limit_change_speed(self, d1, d2, density_increasing):
+        if density_increasing:
+            return max(min(d2, d1 + self.change_up[0]), d1 - self.change_down)
         else:
-            if density[i + 1] > density[i]:
-                out[i + 1] = np.nanmax(
-                    (np.nanmin((d2, d1 + change_ups[0])), d1 - change_down)
-                )
+            return max(min(d2, d1 + self.change_up[1]), d1 - self.change_down)
+
+    def _limit_change_other(self, d1, d2):
+        return max(min(d2, d1 * self.factor), (d1 / self.factor))
+
+    def limit_change_speed(self, speed, density):
+        for i, (d1, d2) in enumerate(zip(speed[:-1], speed[1:])):
+            if np.isnan(d2):
+                speed[i + 1] = d1
             else:
-                out[i + 1] = np.nanmax(
-                    (np.nanmin((d2, d1 + change_ups[1])), d1 - change_down)
-                )
-    return out
+                density_increasing = density[i + 1] > density[i]
+                speed = self.limit_change_speed(d1, d2, density_increasing)
 
+        return speed
 
-def _get_callable(obj_str):
-    # TODO: Modify to allow scaler_str to be more general
-    # TODO: Validation
+    def limit_change_other(self, x):
+        # Should be satisfied if used ValuesFilter
+        assert all(x > 0)
 
-    obj = eval(obj_str)
+        for i, (d1, d2) in enumerate(zip(x[:-1], x[1:])):
+            if np.isnan(d2):
+                x[i + 1] = d1
+            else:
+                x[i + 1] = self._limit_change_other(d1, d2)
 
-    return obj
+        return x
 
+    @iterate_storms_method()
+    def transform(self, X):
 
-def _delete_df_cols(X, cols, errors="ignore", **kwargs):
-    return X.drop(columns=cols, errors=errors)
+        if self.copy:
+            X_ = X.copy()
+        else:
+            X_ = X
+
+        X_[self.speed_col] = self.limit_change_speed(
+            speed=X_[self.speed_col], density=X_[self.density_col]
+        )
+
+        X_[self.density_col] = self.limit_change_other(X_[self.density_col])
+        X_[self.temp_col] = self.limit_change_other(X_[self.temp_col])
+
+        return X_
+
+    def inverse_transform(self, X):
+        return X
 
 
 class HydraPipeline(BaseEstimator, TransformerMixin):
@@ -496,10 +537,10 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
     @pipeline_step("filter", return_transformer=False)
     def _add_filter(self, params):
 
+        logger.debug("Filter type: %s", params.type)
+
         if params.type == "limited_change":
-            logger.debug("Filter type: %s", params.type)
-            # INCOMPLETE
-            pass
+            return LimitedChangeFilter(**params)
 
     @pipeline_step("propagate")
     def _add_propagate(self, params):
