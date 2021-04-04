@@ -1,23 +1,41 @@
-import pandas as pd
-import numpy as np
-import logging
 import functools
 import itertools
+import logging
+
+import numpy as np
+import pandas as pd
+from hydra.utils import to_absolute_path
+from omegaconf import OmegaConf, open_dict
 
 # from loguru import logger
 from pandas.tseries.frequencies import to_offset
-from sklearn.base import TransformerMixin, BaseEstimator
-from sklearn.utils.validation import check_is_fitted
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
-from omegaconf import OmegaConf, open_dict
-from hydra.utils import to_absolute_path
+from sklearn.utils.validation import check_is_fitted
+
+from src.storm_utils import iterate_storms_method
 
 logger = logging.getLogger(__name__)
 
 # For SolarWindPropagator
 KM_PER_RE = 6371
 X0_RE = 10
+
+
+def _get_callable(obj_str):
+    # TODO: Modify to allow scaler_str to be more general
+    # TODO: Validation
+
+    obj = eval(obj_str)
+
+    return obj
+
+
+def _delete_df_cols(X, cols, errors="ignore", **kwargs):
+    logger.debug(f"Deleting columns: {', '.join(cols)} ")
+    return X.drop(columns=cols, errors=errors)
+
 
 class Resampler(TransformerMixin):
     def __init__(
@@ -86,34 +104,43 @@ class Resampler(TransformerMixin):
             self.func = "mean"
 
         self.freq = to_offset(self.freq)
-        self.X_freq_ = self._get_freq(X)
+        # self.X_freq_ = self._get_freq(X)
 
         return self
 
+    @iterate_storms_method(drop_storms=True)
     def transform(self, X, y=None):
+        # TODO: Use iterate_storms_method here
 
-        X_freq = self._get_freq(X)
-        logger.debug("Frequency: %s", X_freq)
-        assert X_freq == self.X_freq_, "X does not have the correct frequency."
+        # X_freq = self._get_freq(X)
+        X_freq = to_offset(pd.infer_freq(X.index))
+
+        # # Checking frequency is probably unnecessary
+        # logger.debug("Inferred Frequency: %s", X_freq)
+        # assert X_freq == self.X_freq_, "X does not have the correct frequency."
 
         if X_freq is None or self.freq > X_freq:
-            if isinstance(X.index, pd.MultiIndex):
-                X = (
-                    X.groupby(level="storm")
-                    .resample(
-                        self.freq, label=self.label, level=self.time_col, **self.kwargs
-                    )
-                    .apply(self.func)
-                )
-            else:
-                X = X.resample(self.freq, label=self.label, **self.kwargs).apply(
-                    self.func
-                )
+            X = X.resample(self.freq, label=self.label, **self.kwargs).apply(self.func)
         else:
             if self.verbose:
                 logger.debug(
                     f"Specified frequency ({self.freq}) is <= data frequency ({X_freq}). Resampling is ignored."
                 )
+
+        # Using iterate_storms_method instead
+        # if X_freq is None or self.freq > X_freq:
+        #     if isinstance(X.index, pd.MultiIndex):
+        #         X = (
+        #             X.groupby(level="storm")
+        #             .resample(
+        #                 self.freq, label=self.label, level=self.time_col, **self.kwargs
+        #             )
+        #             .apply(self.func)
+        #         )
+        #     else:
+        #         X = X.resample(self.freq, label=self.label, **self.kwargs).apply(
+        #             self.func
+        #         )
 
         return X
 
@@ -155,19 +182,26 @@ class Interpolator(TransformerMixin):
 
         return X
 
+    @iterate_storms_method(drop_storms=True)
     def transform(self, X, y=None):
+        return X.interpolate(
+            method=self.method,
+            axis=self.axis,
+            limit_direction=self.limit_direction,
+            **self.kwargs,
+        )
 
-        if isinstance(X.index, pd.MultiIndex):
-            X = self._transform_multi_idx(X)
-        else:
-            X = X.interpolate(
-                method=self.method,
-                axis=self.axis,
-                limit_direction=self.limit_direction,
-                **self.kwargs,
-            )
-
-        return X
+        # Replaced by iterate_storms_method
+        # if isinstance(X.index, pd.MultiIndex):
+        #     X = self._transform_multi_idx(X)
+        # else:
+        #     X = X.interpolate(
+        #         method=self.method,
+        #         axis=self.axis,
+        #         limit_direction=self.limit_direction,
+        #         **self.kwargs,
+        #     )
+        # return X
 
     # NOTE: This is for inverse transforming the pipeline when computing metrics later.
     # The only thing that needs to be inversed is the scaler.
@@ -462,7 +496,6 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
         # TODO: Change this to take general arguments to make it more general.
         self.cfg = cfg
         self.pipeline_list = []
-
         # NOTE: Add new method for each processing step
 
     def _param_in_cfg(self, param):
@@ -472,7 +505,6 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
     def add_step(self, name, transformer):
         self.pipeline_list.append((name, transformer))
 
-    # TODO: Modify pipeline steps below to return transformer
     def pipeline_step(param, return_transformer=True):
         # Decorator for pipeline step helper functions
         # param should be the param in config file
@@ -500,20 +532,18 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
 
     @pipeline_step("delete_cols")
     def _add_delete_cols(self, params):
+        # params should be a list of columns to delete
 
-        cols_to_delete = list(itertools.chain(*params))
-        delete_cols_transformer = FunctionTransformer(
-            _delete_df_cols, kw_args={"cols": cols_to_delete}
-        )
-
-        if len(cols_to_delete) == 0:
+        if len(params) == 0:
             return None
-        else:
-            return delete_cols_transformer
+
+        delete_cols_transformer = FunctionTransformer(
+            _delete_df_cols, kw_args={"cols": params}
+        )
+        return delete_cols_transformer
 
     @pipeline_step("interpolate")
     def _add_interpolate(self, params):
-
         if isinstance(params, bool):
             if params:
                 return Interpolator()
@@ -524,7 +554,6 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
 
     @pipeline_step("resample")
     def _add_resample(self, params):
-
         if OmegaConf.is_config(params):
             return Resampler(**params)
             # self.pipeline_list.append(("resampler", Resampler(**params)))
@@ -609,6 +638,12 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
 
         if self.pipeline_ is not None:
             self.pipeline_.fit(X, y)
+
+            # This won't work because we are repeatedly fitting pipeline with different storms
+            # if has_storm_index(X):
+            #     apply_storms(self.pipeline_.fit, X=X, y=y)
+            # else:
+            #     self.pipeline_.fit(X, y)
 
         return self
 
