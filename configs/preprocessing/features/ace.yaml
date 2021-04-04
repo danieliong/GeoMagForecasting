@@ -51,14 +51,11 @@ pipeline:
       change_down: 30
       change_ups: [ 50, 10 ]
   propagate:
-    # TODO
-    position_cols:
-      - "x_gse"
-      - "y_gse"
-      - "z_gse"
+    x_coord_col: "x"
+    speed_col: "speed"
+    time_level: "times"
+    freq: "T"
   delete_cols:
-    - "x_gse"
-    - "y_gse"
-    - "z_gse"
+    - "x"
     - "status_swepam"
     - "status_mag"

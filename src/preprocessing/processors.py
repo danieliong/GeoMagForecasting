@@ -15,6 +15,9 @@ from hydra.utils import to_absolute_path
 
 logger = logging.getLogger(__name__)
 
+# For SolarWindPropagator
+KM_PER_RE = 6371
+X0_RE = 10
 
 class Resampler(TransformerMixin):
     def __init__(
@@ -280,56 +283,102 @@ class ValuesFilter(BaseEstimator, TransformerMixin):
     def inverse_transform(self, X):
         return X
 
+
+# REVIEW
 class SolarWindPropagator(BaseEstimator, TransformerMixin):
     def __init__(
-        self, position_cols=["x_gse", "y_gse", "z_gse"], delete_cols=True, force=False
+        self,
+        x_coord_col="x",
+        speed_col="speed",
+        time_level="times",
+        freq=None,
+        delete_cols=True,
+        force=False,
     ):
-        self.position_cols = position_cols
+        self.x_coord_col = x_coord_col
+        self.speed_col = speed_col
+        self.time_level = time_level
+        self.freq = freq
         self.delete_cols = delete_cols
         self.force = force
+        # TODO: Load positions from position_path if it is not None
 
     def fit(self, X, y=None):
-        # TODO: Check if satellite positions are in columns
 
         if self.force:
-            assert all(col in X.columns for col in self.position_cols)
+            assert self.x_coord_col in X.columns
+            assert self.speed_col in X.columns
+
+            if self.freq is None:
+                self.freq = pd.infer_freq(X.index)
 
         return self
 
-    def transform(self, X):
-        # TODO
+    @staticmethod
+    def _make_time_nondecreasing(times):
 
+        if not times.is_monotonic_increasing:
+            current_min = pd.Timestamp.max
+            for i, time in enumerate(times[::-1]):
+                if time >= current_min:
+                    times[~i] = np.nan
+                if not pd.isna(time):
+                    current_min = min(current_min, time)
+
+        return times
+
+    @classmethod
+    def compute_propagated_times(cls, x_coord, speed, times, freq):
+
+        delta_x = (x_coord - X0_RE) * KM_PER_RE
+        time_delay = pd.to_timedelta(delta_x / speed, unit="sec")
+        propagated_time = cls._make_time_nondecreasing(times + time_delay)
+
+        return propagated_time.round(freq)
+
+    @iterate_storms_method(drop_storms=True)
+    def transform(self, X):
         # Needed to transform lagged target the same way as solar wind
         # TODO: Do this for filters also
-        if any(col not in X.columns for col in self.position_cols) and not self.force:
-            logger.debug(
-                "X doesn't contain satellite position columns. Ignoring SolarWindPropagator."
-            )
-            # Do nothing if X doesn't have position columns
-            return X
+
+        required_cols = [self.x_coord_col, self.speed_col]
+        if any(col not in X.columns for col in required_cols):
+            if self.force:
+                raise ValueError(
+                    f"X doesn't contain the columns {', '.join(required_cols)}."
+                )
+            else:
+                return X
+
+        # TODO: Add code for propagating solar wind
+        # TODO:  Try to use iterate_storms_method decorator here.
+
+        X_ = X.copy()
+        x_coord = X_[self.x_coord_col]
+        speed = X_[self.speed_col]
+        times = X_.index.get_level_values(self.time_level)
+
+        # QUESTION: Should I interpolate, drop, or fill NAs in speed?
+        if speed.isna().any():
+            speed.interpolate(method="linear", inplace=True, limit_direction="both")
+
+        # Set propagated time as new time index
+        X_["propagated_time"] = self.compute_propagated_times(
+            x_coord, speed, times, self.freq
+        )
+        X_.dropna(subset=["propagated_time"], inplace=True)
+        X_.set_index("propagated_time", inplace=True)
+        X_.index.rename(self.time_level, inplace=True)
+
+        # Resample to make time index have the same resolution as original time
+        # REVIEW
+        X_ = X_.resample(self.freq).mean()
 
         if self.delete_cols:
-            logger.debug("Dropping satellite position columns...")
-            X = X.drop(columns=self.position_cols)
+            logger.debug("Dropping x position column...")
+            X_.drop(columns=[self.x_coord_col], inplace=True)
 
-        return X
-
-
-# TODO: Add this to pipeline
-def limited_change(x, factor=1.3):
-    """Apply limited relative change to density and temperature by a set factor"""
-
-    out = x.copy()
-
-    # treat 0 as nan for density and temperature
-    out.loc[out.values == 0] = np.nan
-
-    for i, (d1, d2) in enumerate(zip(out[:-1], out[1:])):
-        if np.isnan(d2):
-            out[i + 1] = d1  # assume persistence
-        else:
-            out[i + 1] = np.nanmax((np.nanmin((d2, d1 * factor)), d1 / factor))
-    return out
+        return X_
 
 
 # TODO: Add this to pipeline
@@ -501,8 +550,9 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
         self._add_values_filter()
         self._add_resample()
         self._add_filter()
-        self._add_interpolate()
+        # QUESTION: Should I propagate before interpolating?
         self._add_propagate()
+        self._add_interpolate()
         self._add_delete_cols()
         self._add_scaler_func()
 
