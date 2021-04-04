@@ -56,7 +56,7 @@ def _load_solar_wind(
     start="2010-01-01",
     end="2019-12-31",
     path="data/omni_2010-2019.csv.gz",
-    features=OMNI_FEATURES,
+    features=None,
     time_col="times",
     **kwargs,
 ):
@@ -73,12 +73,7 @@ def _load_solar_wind(
         usecols = None
 
     data = pd.read_csv(
-        path,
-        index_col=time_col,
-        parse_dates=True,
-        dtype=np.float32,
-        usecols=usecols,
-        **kwargs,
+        path, index_col=time_col, parse_dates=True, usecols=usecols, **kwargs,
     )
 
     # Subset times [start, end)
@@ -89,13 +84,45 @@ def _load_solar_wind(
 
 
 def load_features_omni(
-    path="data/omni_2010-2019.csv.gz", features=OMNI_FEATURES, **kwargs
+    path="data/omni_2010-2019.csv.gz",
+    features=OMNI_FEATURES,
+    dtype=np.float32,
+    **kwargs,
 ):
-    return _load_solar_wind(path=path, features=features, **kwargs)
+    return _load_solar_wind(path=path, features=features, dtype=dtype, **kwargs)
 
 
-def load_features_ace(path="data/ace_2010-2019.csv", features=ACE_FEATURES, **kwargs):
-    return _load_solar_wind(path=path, features=features, **kwargs)
+def load_features_ace(
+    path="data/ace_2010-2019.csv",
+    positions_path="data/ace_pos_2010-2019.csv",
+    features=ACE_FEATURES,
+    dtype=np.float32,
+    time_col="times",
+    x_coord_col="x",
+    fillna_method="ffill",
+    **kwargs,
+):
+    dtypes = {"status_swepam": np.uint8, "status_mag": np.uint8, "temperature": int}
+    df = _load_solar_wind(path=path, features=features, dtype=dtype, **kwargs)
+
+    if positions_path is not None:
+        positions_path = to_absolute_path(positions_path)
+
+        positions = pd.read_csv(
+            positions_path,
+            index_col=time_col,
+            usecols=[time_col, x_coord_col],
+            parse_dates=True,
+        )
+        df = df.merge(positions, how="left", on=time_col)
+        df[x_coord_col].fillna(method=fillna_method, inplace=True)
+
+    return df.astype(dtypes)
+
+
+def load_positions_ace(path="data/ace_pos_2010-2019.csv", **kwargs):
+    df = _load_solar_wind(path=path, **kwargs)
+    return df
 
 
 def load_target_supermag(

@@ -1,10 +1,10 @@
 # @package _group_
 
-
 name: ace
 
 load:
-  path: data/ace_2010-2019.csv.gz
+  path: data/ace_2010-2019.csv
+  positions_path: data/ace_pos_2010-2019.csv
   time_col: "times"
   features:
     - "density"
@@ -16,6 +16,7 @@ load:
     - "status_swepam"
     - "status_mag"
 
+# IDEA: Decide order here instead of in HydraPipeline? 
 pipeline:
   # Arguments for HydraPipeline
   interpolate:

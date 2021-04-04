@@ -62,3 +62,4 @@ class DataLoader:
 
     load_features = partialmethod(_load, input_type="features")
     load_target = partialmethod(_load, input_type="target")
+    load_positions = partialmethod(_load, input_type="positions")
