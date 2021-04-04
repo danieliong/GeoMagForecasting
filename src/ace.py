@@ -28,7 +28,6 @@ COLS_TO_EXCLUDE = ["Day"]
 ACCEPTED_RESOLUTIONS = ["1m", "5m", "1h"]
 HEADER_END_REGEX = re.compile("^#--------------")
 
-
 # FIXME
 class ACEDownloader:
     def __init__(
@@ -176,7 +175,10 @@ class ACEDownloader:
 def _fmt_col(x, append_txt=None):
     # Format column names
     # Lowercase and remove punctuations
-    x_fmt = x.translate(str.maketrans("", "", string.punctuation)).lower()
+
+    x_fmt = x.translate(
+        str.maketrans("", "", string.punctuation.replace("_", ""))
+    ).lower()
     if append_txt is not None:
         x_fmt = x_fmt + "_" + append_txt
     return x_fmt
@@ -195,9 +197,11 @@ def _ace_paths(
     if resolution in ["1m", "5m"]:
         parent_dir = root_dir / "daily"
         date_fmt = "%Y%m%d"
+        rrule_freq = rrule.DAILY
     elif resolution == "1h":
         parent_dir = root_dir / "hourly"
         date_fmt = "%Y%m"
+        rrule_freq = rrule.MONTHLY
 
     def _is_datetime_object(x):
         return isinstance(x, dt.datetime) or isinstance(x, pd.Timestamp)
@@ -208,12 +212,22 @@ def _ace_paths(
     if not _is_datetime_object(end):
         end = dt.datetime.fromisoformat(end)
 
-    for date in rrule.rrule(rrule.DAILY, dtstart=start, until=end):
+    for date in rrule.rrule(rrule_freq, dtstart=start, until=end):
         date_str = date.strftime(date_fmt)
         yield {
             feat_type: parent_dir / f"{date_str}_ace_{feat_type}_{resolution}.txt"
             for feat_type in feature_types
         }
+
+
+def _format_df(df, start, end, feat_type):
+
+    if STATUS_COL in df.columns:
+        df.rename({STATUS_COL: f"status_{feat_type}"}, axis=1, inplace=True)
+
+    df.rename(_fmt_col, axis=1, inplace=True)
+
+    return df[start:end]
 
 
 def _read_path(
@@ -225,7 +239,6 @@ def _read_path(
     time_cols=TIME_COLS,
     exclude_cols=COLS_TO_EXCLUDE,
     delim_whitespace=True,
-    mangle_dupe_cols=False,
     **kwargs,
 ):
     # Read ACE data for one path
@@ -248,11 +261,10 @@ def _read_path(
         usecols=_usecols,
         **kwargs,
     )
-    df.rename(_fmt_col, axis=1, inplace=True)
-    if _fmt_col(STATUS_COL) in df.columns:
-        df.rename({_fmt_col(STATUS_COL): f"status_{feat_type}"}, axis=1, inplace=True)
 
-    return df[start:end]
+    df = _format_df(df, start, end, feat_type)
+
+    return df
 
 
 def _generate_dfs(paths_dicts, **kwargs):
@@ -263,7 +275,7 @@ def _generate_dfs(paths_dicts, **kwargs):
             _read_path(path, feat_type, **kwargs)
             for feat_type, path in path_dict.items()
         )
-        df = pd.concat(df_iter, axis="columns")
+        df = pd.concat(df_iter, axis="columns", join="inner")
         yield df
 
 
@@ -313,7 +325,7 @@ if __name__ == "__main__":
     pos_path = Path("data/ace_pos_2010-2019.csv")
 
     if not data_path.exists():
-        data = concat_ace_data()
+        data = concat_ace_data(feature_types=["swepam", "mag"])
         data.to_csv(data_path)
     else:
         print(f"{data_path} already exists.")
