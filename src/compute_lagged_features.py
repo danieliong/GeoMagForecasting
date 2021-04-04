@@ -66,7 +66,7 @@ def main(cfg):
     output_dir = Path(outputs.output_dir)
 
     X_train, y_train, processor = compute_lagged_features(
-        lag=lag, exog_lag=exog_lag, lead=lead, train=True, **load_kwargs
+        lag=lag, exog_lag=exog_lag, lead=lead, train=True, inputs_dir=".", **load_kwargs
     )
     utils.save_output(X_train, output_dir / outputs.X_train)
     utils.save_output(y_train, output_dir / outputs.y_train)

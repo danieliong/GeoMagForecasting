@@ -25,7 +25,7 @@ def _is_pandas_obj(x):
 
 
 # TODO: Delete beginning _
-def _has_storm_index(x, allow_index=False):
+def has_storm_index(x, allow_index=False):
 
     if allow_index:
         if _is_index(x):
@@ -45,7 +45,7 @@ class StormIndexAccessor:
         self._obj = pandas_obj
 
     def _validate(self, obj):
-        valid = _has_storm_index(obj, allow_index=True)
+        valid = has_storm_index(obj, allow_index=True)
         if not valid:
             raise AttributeError(f"Must have '{STORM_LEVEL}' level.")
 
@@ -100,7 +100,7 @@ class StormAccessor:
 
     @staticmethod
     def _validate(obj):
-        valid = _has_storm_index(obj, allow_index=False)
+        valid = has_storm_index(obj, allow_index=False)
         if not valid:
             raise AttributeError(f"Must have index with level {STORM_LEVEL}")
 
@@ -142,7 +142,7 @@ class StormAccessor:
 
     def has_same_storms(self, *obj):
         for x in obj:
-            assert _has_storm_index(x, allow_index=True)
+            assert has_storm_index(x, allow_index=True)
             if not self.level.equals(x.storms.level):
                 return False
         return True
@@ -187,17 +187,22 @@ def apply_storms(
     func, X, y=None, *, storm_kwargs=None, concat="pandas", drop_storms=False, **kwargs
 ):
 
-    func_storms_gen = _func_storms_gen(
+    func_storms = _func_storms_gen(
         func, X, y, storm_kwargs=storm_kwargs, drop_storms=drop_storms, **kwargs
     )
 
     if concat == "pandas":
-        res = pd.concat(func_storms_gen, keys=X.storms.level, copy=False)
+        res = pd.concat(func_storms, keys=X.storms.level, copy=False)
     elif concat == "numpy":
         # XXX: There's probably a more memory efficient way to do this
-        res = np.concatenate(list(func_storms_gen))
+        res = np.concatenate(list(func_storms))
     elif concat == "list":
-        res = list(func_storms_gen)
+        res = list(func_storms)
+    elif concat is None:
+        # For functions with side effects
+        for _ in func_storms:
+            pass
+        return None
 
     return res
 
@@ -209,10 +214,10 @@ def _iterate_storms_wrapper(
     # Iterate through args, kwargs and see which is or has MultiIndex
 
     # When args, kwargs doesn't have storm index, just return result of func
-    if not _has_storm_index(X):
+    if not has_storm_index(X):
         if y is None:
             return func(X, **kwargs)
-        elif not _has_storm_index(y):
+        elif not has_storm_index(y):
             return func(X, y, **kwargs)
 
     if y is not None:

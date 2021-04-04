@@ -15,7 +15,7 @@ from src.storm_utils import (
     apply_storms,
     StormAccessor,
     StormIndexAccessor,
-    _has_storm_index,
+    has_storm_index,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,9 +97,9 @@ class LaggedFeaturesProcessor:
         start_exog = end - self.exog_lag
 
         # HACK: Subset storm
-        if _has_storm_index(X):
+        if has_storm_index(X):
             X = X.xs(target_storm, level="storm")
-        if _has_storm_index(y):
+        if has_storm_index(y):
             y = y.xs(target_storm, level="storm")
 
         # Ravel target and solar wind between start and end time
