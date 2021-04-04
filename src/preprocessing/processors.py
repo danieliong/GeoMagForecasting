@@ -225,7 +225,61 @@ class PandasTransformer(BaseEstimator, TransformerMixin):
         return X_pd
 
 
-# INCOMPLETE
+class ValuesFilter(BaseEstimator, TransformerMixin):
+    def __init__(
+        self, bad_values=[-9999, -999], value_ranges=None, copy=True, **replace_kwargs
+    ):
+        self.bad_values = bad_values
+        self.value_ranges = value_ranges
+        self.copy = copy
+        self.replace_kwargs = replace_kwargs
+
+    def fit(self, X, y=None):
+        return self
+
+    def _filter_ranges(self, X):
+
+        for col in self.value_ranges.keys():
+            if col in X.columns:
+                value_min, value_max = self.value_ranges[col]
+                logger.debug(
+                    f"Converting values in {col} that are out of ({value_min}, {value_max}) to NA..."
+                )
+                cond = np.logical_and(X[col] >= value_min, X[col] <= value_max)
+                X[col].where(cond=cond, other=np.nan, inplace=True)
+
+    def _filter_bad_values(self, X):
+        logger.debug(f"Converting values that are in {self.bad_values} to NA...")
+        X.replace(
+            to_replace=self.bad_values,
+            value=np.nan,
+            inplace=True,
+            **self.replace_kwargs,
+        )
+
+    @iterate_storms_method(drop_storms=True)
+    def transform(self, X):
+
+        if self.bad_values is None and self.value_ranges is None:
+            # Do nothing
+            return X
+
+        if self.copy:
+            X_ = X.copy()
+        else:
+            X_ = X
+
+        if self.value_ranges is not None:
+            self._filter_ranges(X_)
+
+        if self.bad_values is not None:
+            self._filter_bad_values(X_)
+
+        return X_
+
+    def inverse_transform(self, X):
+        return X
+
 class SolarWindPropagator(BaseEstimator, TransformerMixin):
     def __init__(
         self, position_cols=["x_gse", "y_gse", "z_gse"], delete_cols=True, force=False
@@ -385,6 +439,11 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
             return Resampler(**params)
             # self.pipeline_list.append(("resampler", Resampler(**params)))
 
+    @pipeline_step("values_filter")
+    def _add_values_filter(self, params):
+        if OmegaConf.is_config(params):
+            return ValuesFilter(**params)
+
     @pipeline_step("filter", return_transformer=False)
     def _add_filter(self, params):
 
@@ -439,6 +498,7 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
 
         # NOTE: Choose order here.
         # params is added as argument in pipeline_steps decorator
+        self._add_values_filter()
         self._add_resample()
         self._add_filter()
         self._add_interpolate()

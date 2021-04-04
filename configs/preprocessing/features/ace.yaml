@@ -33,6 +33,15 @@ pipeline:
     func: null
     inverse_func: null
     kwargs: null
+  values_filter:
+    bad_values: [ -9999, 999 ]
+    value_ranges:
+      density: [ 0, 200 ]
+      speed: [ 200, 2000 ]
+      temperature: [ 1e4, 1e7 ]
+      bx: [ -200, 200 ]
+      by: [ -200, 200 ]
+      bz: [ -200, 200 ]
   filter:
     type: "limited_change"
     density_col: "density"
