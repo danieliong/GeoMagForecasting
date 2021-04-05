@@ -4,17 +4,22 @@ stages:
     cmd: python src/concat_configs.py
     deps:
     - path: configs/
-      md5: 3a942c8795d253fd2d68459ca4aa813a.dir
-      size: 10989
+      md5: 35d92231c5b301613a1de1850409edd4.dir
+      size: 10990
       nfiles: 17
     - path: src/concat_configs.py
       md5: 252811f01efc4172e625aae91d815eca
       size: 498
     outs:
-    - path: params/
-      md5: 9779d359aaba2832823f7a92110cedac.dir
-      size: 13392
-      nfiles: 4
+    - path: params/compute_lagged_features.yaml
+      md5: bdf968f2a53d08e4d2471b3b03999ca3
+      size: 4423
+    - path: params/process_data.yaml
+      md5: 5bb99000894fbe8b0ef9e09e7cb19f1f
+      size: 4185
+    - path: params/train.yaml
+      md5: 8fda9fca62e889fee6aaba4a1b33667d
+      size: 3992
   process_data:
     cmd: python src/process_data.py
     deps:
