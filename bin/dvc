@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# set -euo pipefail
+
+# My workaround for using DVC with Hydra.
+
+# Concatenate configs to params.yaml first
+${CONDA_PREFIX}/bin/dvc repro -s concat_configs --quiet
+
+# Run dvc as usual
+# echo "Running dvc as usual..."
+${CONDA_PREFIX}/bin/dvc "$@"
