@@ -1,10 +1,5 @@
 # @package _global_
 
-# features: solar_wind
-# target: symh
-# split: storms 
-# overrides: ''
-
 defaults:
   - target: symh
   - features: omni
@@ -19,9 +14,7 @@ lead: "H"
 hydra:
   verbose: true
   run:
-    # Same dir as process_data
-    dir: outputs/processed_data/features-${features.name}/target-${target.name}/split-${split.method}/${overrides}
-
+    dir: outputs/processed_data
   job:
     config:
       override_dirname:
