@@ -4,8 +4,8 @@ stages:
     cmd: python src/concat_configs.py
     deps:
     - path: configs/
-      md5: 35d92231c5b301613a1de1850409edd4.dir
-      size: 10990
+      md5: 3a942c8795d253fd2d68459ca4aa813a.dir
+      size: 10989
       nfiles: 17
     - path: src/concat_configs.py
       md5: 252811f01efc4172e625aae91d815eca
@@ -15,17 +15,17 @@ stages:
       md5: bdf968f2a53d08e4d2471b3b03999ca3
       size: 4423
     - path: params/process_data.yaml
-      md5: 5bb99000894fbe8b0ef9e09e7cb19f1f
-      size: 4185
+      md5: f9030e3d6195e2e4cfcacd26c3d9c52b
+      size: 4916
     - path: params/train.yaml
       md5: 8fda9fca62e889fee6aaba4a1b33667d
       size: 3992
   process_data:
     cmd: python src/process_data.py
     deps:
-    - path: data/omni_2010-2019.csv.gz
-      md5: 0cfa33ca53d7178113b5bed3b45b579e
-      size: 286647580
+    - path: data/ace_2010-2019.csv
+      md5: 34504f6c50b2b602c4f052b7862840a4
+      size: 384264281
     - path: data/stormtimes.csv
       md5: 91ee8bd4dd541ad6311da2eb23078e75
       size: 8941
@@ -36,28 +36,29 @@ stages:
       params/process_data.yaml:
         end: '2019-12-31'
         features:
-          name: omni
+          name: ace
           load:
-            path: data/omni_2010-2019.csv.gz
+            path: data/ace_2010-2019.csv
+            positions_path: data/ace_pos_2010-2019.csv
             time_col: times
             features:
-            - b
+            - density
+            - speed
+            - temperature
             - bx
             - by
             - bz
-            - vx_gse
-            - vy_gse
-            - vz_gse
-            - density
-            - temperature
-            - pressure
-            - e
-            - beta
-            - alfven_mach
-            - mach
-            - x_gse
-            - y_gse
-            - z_gse
+            - status_swepam
+            - status_mag
+          columns:
+            times: times
+            speed: speed
+            density: density
+            temperature: temperature
+            x_coord: x
+            status:
+            - status_swepam
+            - status_mag
           pipeline:
             interpolate:
               method: linear
@@ -74,10 +75,35 @@ stages:
               func:
               inverse_func:
               kwargs:
+            values_filter:
+              bad_values:
+              - -9999
+              - 999
+              value_ranges:
+                density:
+                - 0
+                - 200
+                speed:
+                - 200
+                - 2000
+                temperature:
+                - 10000.0
+                - 10000000.0
+                bx:
+                - -200
+                - 200
+                by:
+                - -200
+                - 200
+                bz:
+                - -200
+                - 200
             filter:
               type: limited_change
-              density_col: density
-              temp_col: temperature
+              speed_col: ${features.columns.speed}
+              density_col: ${features.columns.density}
+              temp_col: ${features.columns.temperature}
+              copy: true
               limited_change:
                 factor: 1.3
                 change_down: 30
@@ -85,10 +111,13 @@ stages:
                 - 50
                 - 10
             propagate:
+              x_coord_col: ${features.columns.x_coord}
+              speed_col: ${features.columns.speed}
+              time_level: ${features.columns.times}
+              freq: T
             delete_cols:
-            - x_gse
-            - y_gse
-            - z_gse
+            - ${features.columns.x_coord}
+            - ${features.columns.status}
         seed: 8686
         split:
           method: storms
@@ -116,20 +145,20 @@ stages:
               kwargs:
     outs:
     - path: outputs/processed_data/features_pipeline.pkl
-      md5: 3dd885f1515ca399c656ae12fba37802
-      size: 8244
+      md5: 187f0fe1e1b8619e649c514a6a1f3a0c
+      size: 11118
     - path: outputs/processed_data/target_pipeline.pkl
-      md5: 2a6959010460062f9f9c99be1915222a
-      size: 7880
+      md5: 89556af717a4442bd84ae4f7949cce0e
+      size: 10445
     - path: outputs/processed_data/test_features.pkl
-      md5: 2d4d4f0fcb896005c2d637de4f8b8bc8
-      size: 2773985
+      md5: 396c7fae1417f0bfdc51aa8b91b6c9da
+      size: 1472278
     - path: outputs/processed_data/test_target.pkl
       md5: b690c26b560dee5ef342b468a1a5ee79
       size: 109500
     - path: outputs/processed_data/train_features.pkl
-      md5: 7cf58f478edc96468142b6c449837c5a
-      size: 76132953
+      md5: 54111615e8da40987f78f710f1df8314
+      size: 40831745
     - path: outputs/processed_data/train_target.pkl
       md5: c61c5bed6364c45c684ffb548339096f
       size: 3478396
