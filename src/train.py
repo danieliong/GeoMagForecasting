@@ -183,7 +183,7 @@ def compute_metric(y, ypred, metric):
 
 
 # NOTE: Make this return RMSE to use Nevergrad
-@hydra.main(config_path="../configs/models", config_name="config")
+@hydra.main(config_path="../configs", config_name="train")
 def train(cfg):
 
     # XXX: Setting URI doesn't work unless I import inside main

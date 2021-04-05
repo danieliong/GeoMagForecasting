@@ -16,6 +16,15 @@ load:
     - "status_swepam"
     - "status_mag"
 
+
+columns:
+  times: "times"
+  speed: "speed"
+  density: "density"
+  temperature: "temperature"
+  x_coord: "x"
+  status: [ "status_swepam", "status_mag" ]
+    
 # IDEA: Decide order here instead of in HydraPipeline? 
 pipeline:
   # Arguments for HydraPipeline
@@ -45,20 +54,20 @@ pipeline:
       bz: [ -200, 200 ]
   filter:
     type: "limited_change"
-    speed_col: "speed"
-    density_col: "density"
-    temp_col: "temperature"
+    speed_col: ${features.columns.speed}
+    density_col: ${features.columns.density}
+    temp_col: ${features.columns.temperature}
     copy: True
     limited_change:
       factor: 1.3
       change_down: 30
       change_ups: [ 50, 10 ]
   propagate:
-    x_coord_col: "x"
-    speed_col: "speed"
-    time_level: "times"
+    x_coord_col: ${features.columns.x_coord}
+    speed_col: ${features.columns.speed}
+    time_level: ${features.columns.times}
     freq: "T"
   delete_cols:
-    - "x"
-    - "status_swepam"
-    - "status_mag"
+    - ${features.columns.x_coord}
+    # CHECK: Don't know if this will work since status is a list
+    - ${features.columns.status}

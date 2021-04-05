@@ -32,7 +32,7 @@ def _delete_overlap_times(train, test):
     return train, test
 
 
-@hydra.main(config_path="../configs/preprocessing", config_name="config")
+@hydra.main(config_path="../configs", config_name="process_data")
 def main(cfg: DictConfig) -> None:
     """Loads data from data/raw and do initial pre-processing before extracting
     features. Pre-processed data is saved in data/interim

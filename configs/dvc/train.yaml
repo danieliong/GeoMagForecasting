@@ -1,0 +1,39 @@
+# @package _global_
+lag: H
+exog_lag: H
+lead: H
+features: solar_wind
+target: symh
+split: ${cv.method}
+overrides: ''
+experiment_name: geomag_forecasting
+seed: 8686
+load:
+  inputs_dir: outputs/processed_data/features-${features}/target-${target}/split-${split}/${overrides}/
+  paths:
+    group_labels: group_labels.pkl
+    target_pipeline: target_pipeline.pkl
+    X_train: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/X_train.npy
+    y_train: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/y_train.pkl
+    X_test: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/X_test.npy
+    y_test: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/y_test.pkl
+inverse_transform: true
+metric: rmse
+model: xgboost
+param:
+  learning_rate: 0.2
+  max_depth: 6
+  min_child_weight: 2
+  colsample_bytree: 0.8
+kwargs:
+  num_boost_round: 30
+  early_stopping_rounds: 10
+  metrics: rmse
+outputs:
+  model: model.xgb
+  predictions: ypred.pkl
+  cv_results: cv_results.csv
+cv:
+  method: storms
+  init_params:
+    n_splits: 5

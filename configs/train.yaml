@@ -29,7 +29,7 @@ lag: "H"
 exog_lag: "H"
 lead: "H"
 
-features: solar_wind
+features: omni
 target: symh
 split: ${cv.method}
 

@@ -55,7 +55,7 @@ def compute_lagged_features(
     return X_lagged, y_target, processor
 
 
-@hydra.main(config_path="../configs/preprocessing", config_name="lagged_features")
+@hydra.main(config_path="../configs", config_name="compute_lagged_features")
 def main(cfg):
 
     load_kwargs = cfg.inputs

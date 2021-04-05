@@ -1,0 +1,38 @@
+# @package _global_
+
+defaults:
+  - target: symh
+  - features: ace
+  - split: storms
+
+hydra:
+  verbose: true
+  run:
+    dir: outputs/processed_data
+    # dir: outputs/processed_data/features-${features.name}/target-${target.name}/split-${split.method}/${hydra.job.override_dirname}
+  job:
+    config:
+      override_dirname:
+        kv_sep: '-'
+        item_sep: "_"
+        exclude_keys:
+          - target
+          - features
+          - split
+          - target.loading.data_dir
+          - features.loading.path
+
+start: 2010-01-01
+end: 2019-12-31
+
+seed: 8686
+
+output:
+  # Paths to save output in output directory
+  features_pipeline: features_pipeline.pkl
+  target_pipeline: target_pipeline.pkl
+  train_features: train_features.pkl
+  train_target: train_target.pkl
+  test_features: test_features.pkl
+  test_target: test_target.pkl
+  group_labels: group_labels.pkl
