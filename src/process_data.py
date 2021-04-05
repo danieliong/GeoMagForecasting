@@ -11,7 +11,7 @@ from src.preprocessing.loader import DataLoader
 from src.preprocessing.processors import HydraPipeline
 from src.preprocessing.split import split_data
 from src.utils import save_output
-from src.storm_utils import _has_storm_index, StormIndexAccessor, StormAccessor
+from src.storm_utils import has_storm_index, StormIndexAccessor, StormAccessor
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,8 @@ def main(cfg: DictConfig) -> None:
     logger.info("Loading data...")
 
     data_loader = DataLoader(start=start, end=end, features=features, target=target)
-    features = data_loader.load_features(**features_kwargs)
-    target = data_loader.load_features(**target_kwargs)
+    features = data_loader.load_features(name=features, **features_kwargs)
+    target = data_loader.load_target(name=target, **target_kwargs)
 
     #######################################################################
     logger.info("Splitting data...")
@@ -80,7 +80,7 @@ def main(cfg: DictConfig) -> None:
 
     y_train, y_test = _delete_overlap_times(y_train, y_test)
 
-    # FIXME: For some reason, X_test's storm index is not sorted.
+    # HACK: For some reason, X_test's storm index is not sorted.
     if split_kwargs.method == "storms":
         if not X_train.storms.level.equals(y_train.storms.level):
             X_train.sort_index(level="storm", inplace=True)
@@ -90,9 +90,9 @@ def main(cfg: DictConfig) -> None:
             X_test.sort_index(level="storm", inplace=True)
             y_test.sort_index(level="storm", inplace=True)
 
-    if _has_storm_index(y_train):
-        groups = y_train.index.to_frame(index=False).set_index("times")
-        save_output(groups, output_paths.group_labels)
+    # if has_storm_index(y_train):
+    #     groups = y_train.index.to_frame(index=False).set_index("times")
+    #     save_output(groups, output_paths.group_labels)
 
     #######################################################################
     logger.info("Saving outputs...")

@@ -7,10 +7,9 @@ stages:
       - configs/
       - src/concat_configs.py
     outs:
-      - params/:
-          persist: true
-          cache: false
-
+      - params/process_data.yaml
+      - params/compute_lagged_features.yaml
+      - params/train.yaml
   process_data:
     vars:
       - params/process_data.yaml

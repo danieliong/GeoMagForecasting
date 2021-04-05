@@ -33,7 +33,10 @@ def _get_callable(obj_str):
 
 
 def _delete_df_cols(X, cols, errors="ignore", **kwargs):
+    # Flatten list
+    cols = list(itertools.chain(*cols))
     logger.debug(f"Deleting columns: {', '.join(cols)} ")
+
     return X.drop(columns=cols, errors=errors)
 
 
@@ -565,11 +568,15 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
 
     @pipeline_step("filter", return_transformer=False)
     def _add_filter(self, params):
+        assert OmegaConf.is_dict(params) or isinstance(params, dict)
 
-        logger.debug("Filter type: %s", params.type)
+        if OmegaConf.is_dict(params):
+            params = OmegaConf.to_container(params)
 
-        if params.type == "limited_change":
-            return LimitedChangeFilter(**params)
+        filter_type = params.pop("type")
+        logger.debug("Filter type: %s", filter_type)
+
+        return LimitedChangeFilter(**params[filter_type])
 
     @pipeline_step("propagate")
     def _add_propagate(self, params):
