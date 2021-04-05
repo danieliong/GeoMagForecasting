@@ -1,0 +1,91 @@
+# INCOMPLETE
+stages:
+  concat_configs:
+    desc: "Concatenate configs as as stage so that it doesn't rerun if nothing has changed." 
+    cmd: python src/concat_configs.py
+    deps:
+      - configs/
+      - src/concat_configs.py
+    outs:
+      - params/:
+          persist: true
+          cache: false
+
+  process_data:
+    vars:
+      - params/process_data.yaml
+    cmd: python src/process_data.py
+    deps:
+      - ${target.load.path}
+      - ${features.load.path}
+      - ${split.storm_times}
+    params:
+      - params/process_data.yaml:
+        - start
+        - end
+        - seed
+        - target
+        - features
+        - split
+    outs:
+      - ${hydra.run.dir}/${output.features_pipeline}
+      - ${hydra.run.dir}/${output.target_pipeline} 
+      - ${hydra.run.dir}/${output.train_features} 
+      - ${hydra.run.dir}/${output.train_target} 
+      - ${hydra.run.dir}/${output.test_features} 
+      - ${hydra.run.dir}/${output.test_target} 
+    
+  # process_data:
+  #   vars:
+  #     - configs/preprocessing/config.yaml:output,hydra
+  #     - configs: configs/preprocessing
+    
+  #   foreach:
+  #     - target: symh
+  #       features: ace
+  #       split: storms
+  #   params:
+  #     - target
+  #     - features
+  #     - split
+  #     - ${configs}/config.yaml:
+  #         - start
+  #         - end
+  #         - seed
+  #     - ${configs}/features/${target}.yaml:
+  #         - load
+  #         - pipeline
+  #     - ${configs}/features/${features}.yaml:
+  #         - load
+  #         - pipeline
+  #     - ${configs}/split/${split}.yaml:
+  #         - test_size
+  #   deps:
+  #     - src/process_data.py
+  #     # - ${load.path} 
+  #     # - ${features.load.path}
+  #   outs:
+  #     - ${hydra.run.dir}/${output.features_pipeline} 
+  #     - ${hydra.run.dir}/${output.target_pipeline} 
+  #     - ${hydra.run.dir}/${output.train_features} 
+  #     - ${hydra.run.dir}/${output.train_target} 
+  #     - ${hydra.run.dir}/${output.test_features} 
+  #     - ${hydra.run.dir}/${output.test_target} 
+  #   cmd: python src/process_data.py
+
+  
+  # process_data:
+  #   vars:
+  #     - configs/preprocessing/config.yaml:output
+  #   foreach:
+  #     symh:
+  #       - split=storms
+  #   deps:
+  #     - src/process_data.py
+  #     - configs/preprocessing/config.yaml
+  #     - data/omni_2010-2019.csv.gz
+  #     - data/symh.csv
+  #   outs:
+  #     - ${output}
+  #   cmd: python src/process_data.py target='${key}' '${item}'
+

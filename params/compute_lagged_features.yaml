@@ -1,0 +1,224 @@
+hydra:
+  run:
+    dir: outputs/processed_data/features-${features.name}/target-${target.name}/split-${split.method}/${overrides}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  hydra_logging:
+    version: 1
+    formatters:
+      simple:
+        format: '[%(asctime)s][HYDRA] %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: simple
+        stream: ext://sys.stdout
+    root:
+      level: INFO
+      handlers:
+      - console
+    loggers:
+      logging_example:
+        level: DEBUG
+    disable_existing_loggers: false
+  job_logging:
+    version: 1
+    formatters:
+      simple:
+        format: '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: simple
+        stream: ext://sys.stdout
+      file:
+        class: logging.FileHandler
+        formatter: simple
+        filename: ${hydra.job.name}.log
+    root:
+      level: INFO
+      handlers:
+      - console
+      - file
+    disable_existing_loggers: false
+  sweeper:
+    _target_: hydra._internal.core_plugins.basic_sweeper.BasicSweeper
+    max_batch_size: null
+  launcher:
+    _target_: hydra._internal.core_plugins.basic_launcher.BasicLauncher
+  help:
+    app_name: ${hydra.job.name}
+    header: '${hydra.help.app_name} is powered by Hydra.
+
+      '
+    footer: 'Powered by Hydra (https://hydra.cc)
+
+      Use --hydra-help to view Hydra specific help
+
+      '
+    template: '${hydra.help.header}
+
+      == Configuration groups ==
+
+      Compose your configuration from those groups (group=option)
+
+
+      $APP_CONFIG_GROUPS
+
+
+      == Config ==
+
+      Override anything in the config (foo.bar=value)
+
+
+      $CONFIG
+
+
+      ${hydra.help.footer}
+
+      '
+  hydra_help:
+    hydra_help: ???
+    template: 'Hydra (${hydra.runtime.version})
+
+      See https://hydra.cc for more info.
+
+
+      == Flags ==
+
+      $FLAGS_HELP
+
+
+      == Configuration groups ==
+
+      Compose your configuration from those groups (For example, append hydra/job_logging=disabled
+      to command line)
+
+
+      $HYDRA_CONFIG_GROUPS
+
+
+      Use ''--cfg hydra'' to Show the Hydra config.
+
+      '
+  output_subdir: .hydra
+  overrides:
+    hydra: []
+    task: []
+  job:
+    name: app
+    override_dirname: ''
+    id: ???
+    num: ???
+    config_name: compute_lagged_features
+    env_set: {}
+    env_copy: []
+    config:
+      override_dirname:
+        kv_sep: '-'
+        item_sep: _
+        exclude_keys:
+        - target
+        - features
+        - split
+        - target.loading.data_dir
+        - features.loading.path
+  runtime:
+    version: 1.0.4
+    cwd: /home/danieliong/geomag-forecasting
+  verbose: true
+overrides: ''
+lag: H
+exog_lag: H
+lead: H
+inputs:
+  absolute: false
+  paths:
+    features_pipeline: features_pipeline.pkl
+    target_pipeline: target_pipeline.pkl
+    train_features: train_features.pkl
+    train_target: train_target.pkl
+    test_features: test_features.pkl
+    test_target: test_target.pkl
+    group_labels: group_labels.pkl
+outputs:
+  output_dir: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}
+  X_train: X_train.npy
+  y_train: y_train.npy
+  X_test: X_test.npy
+  y_test: y_test.npy
+  lag_processor: lag_processor.joblib
+target:
+  name: symh
+  load:
+    path: data/symh.csv
+  pipeline:
+    interpolate: false
+    resample:
+      freq: 5T
+      func: mean
+    scaler:
+      scaler: null
+      kwargs: null
+    func:
+      func: null
+      inverse_func: null
+      kwargs: null
+features:
+  name: omni
+  load:
+    path: data/omni_2010-2019.csv.gz
+    time_col: times
+    features:
+    - b
+    - bx
+    - by
+    - bz
+    - vx_gse
+    - vy_gse
+    - vz_gse
+    - density
+    - temperature
+    - pressure
+    - e
+    - beta
+    - alfven_mach
+    - mach
+    - x_gse
+    - y_gse
+    - z_gse
+  pipeline:
+    interpolate:
+      method: linear
+      axis: 0
+      limit_direction: both
+      limit: 15
+    resample:
+      freq: T
+      func: mean
+    scaler:
+      scaler: null
+      kwargs: null
+    func:
+      func: null
+      inverse_func: null
+      kwargs: null
+    filter:
+      type: limited_change
+      density_col: density
+      temp_col: temperature
+      limited_change:
+        factor: 1.3
+        change_down: 30
+        change_ups:
+        - 50
+        - 10
+    propagate: null
+    delete_cols:
+    - x_gse
+    - y_gse
+    - z_gse
+split:
+  method: timeseries
+  test_size: 0.2
