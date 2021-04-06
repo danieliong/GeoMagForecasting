@@ -6,7 +6,7 @@ defaults:
   - split: storms
 
 hydra:
-  verbose: true
+  verbose: false
   run:
     dir: outputs/processed_data
     # dir: outputs/processed_data/features-${features.name}/target-${target.name}/split-${split.method}/${hydra.job.override_dirname}

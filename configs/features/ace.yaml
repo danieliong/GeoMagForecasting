@@ -28,6 +28,14 @@ columns:
 # IDEA: Decide order here instead of in HydraPipeline? 
 pipeline:
   # Arguments for HydraPipeline
+  order:
+    - values_filter
+    - resample
+    - filter
+    - propagate
+    - delete_cols
+    - interpolate
+    - scaler_func
   interpolate:
     method: linear
     axis: 0
@@ -44,8 +52,9 @@ pipeline:
     inverse_func: null
     kwargs: null
   values_filter:
-    bad_values: [ -9999, 999 ]
+    bad_values: [ -9999, 999, 999.9, -999.9 ]
     value_ranges:
+      x: [ 0, 300 ]
       density: [ 0, 200 ]
       speed: [ 200, 2000 ]
       temperature: [ 1e4, 1e7 ]
@@ -62,12 +71,12 @@ pipeline:
       factor: 1.3
       change_down: 30
       change_ups: [ 50, 10 ]
-  propagate:
+  propagate: 
     x_coord_col: ${features.columns.x_coord}
     speed_col: ${features.columns.speed}
     time_level: ${features.columns.times}
+    delete_cols: false
     freq: "T"
   delete_cols:
     - ${features.columns.x_coord}
-    # CHECK: Don't know if this will work since status is a list
     - ${features.columns.status}

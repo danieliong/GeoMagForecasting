@@ -26,6 +26,14 @@ load:
     - "z_gse"
 
 pipeline:
+  order:
+    - values_filter
+    - resample
+    - filter
+    - propagate
+    - delete_cols
+    - interpolate
+    - scaler_func
   # Arguments for HydraPipeline
   interpolate:
     method: linear

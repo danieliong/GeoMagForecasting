@@ -6,7 +6,11 @@ import numpy as np
 from src import STORM_LEVEL
 from functools import wraps, partial
 from collections import OrderedDict
-from pandas.api.extensions import register_index_accessor, register_dataframe_accessor
+from pandas.api.extensions import (
+    register_index_accessor,
+    register_dataframe_accessor,
+    register_series_accessor,
+)
 
 
 def _is_index(x, multi=False):
@@ -67,11 +71,15 @@ class StormIndexAccessor:
     def has_same_storms(self, *obj):
         pass
 
-    def get(self, storm):
+    def get(self, storm, drop_level=False):
         # XXX: There's probably a more efficient way to do this since it's ordered
-        storm_idx = self._obj.names.index("storm")
+        storm_idx = self._obj.names.index(STORM_LEVEL)
         storm_filter = filter(lambda x: x[storm_idx] == storm, self._obj)
-        return pd.MultiIndex.from_tuples(storm_filter)
+        get_idx = pd.MultiIndex.from_tuples(storm_filter, names=self._obj.names)
+        if drop_level:
+            return get_idx.droplevel(storm_idx)
+        else:
+            return get_idx
 
     def dict(self, ordered=True, drop_storm_index=True):
         # Returns dict where keys are storms and values are the associated indices
@@ -92,6 +100,7 @@ class StormIndexAccessor:
         return d
 
 
+@register_series_accessor("storms")
 @register_dataframe_accessor("storms")
 class StormAccessor:
     def __init__(self, pandas_obj):
@@ -137,6 +146,9 @@ class StormAccessor:
     def groupby(self, **kwargs):
         return self._obj.groupby(level=STORM_LEVEL, **kwargs)
 
+    def resample(self, *args, **kwargs):
+        return self.groupby().resample(*args, **kwargs)
+
     def apply(self, **kwargs):
         return self.groupby().apply(**kwargs)
 
@@ -163,17 +175,20 @@ def _func_storms_gen(
         assert X.storms.has_same_storms(y), "X must have same storms as y"
 
     for storm in X.storms.level:
+        # Index storm_kwargs by storm
         if storm_kwargs is not None:
             storm_kwargs_ = {
-                key: arg.storms.get(storm) for key, arg in storm_kwargs.items()
+                key: arg.storms.get(storm, drop_level=drop_storms)
+                for key, arg in storm_kwargs.items()
             }
         else:
             storm_kwargs_ = {}
 
         if y is not None:
+            # Index X, y by storm and use as argument
             yield func(
                 X.storms.get(storm, drop_level=drop_storms),
-                y.storms.get(storm),
+                y.storms.get(storm, drop_level=drop_storms),
                 **storm_kwargs_,
                 **kwargs,
             )
@@ -219,6 +234,8 @@ def _iterate_storms_wrapper(
             return func(X, **kwargs)
         elif not has_storm_index(y):
             return func(X, y, **kwargs)
+        else:
+            raise ValueError("y has storm index but X doesn't.")
 
     if y is not None:
         assert X.storms.has_same_storms(y), "X must have same storms as y"

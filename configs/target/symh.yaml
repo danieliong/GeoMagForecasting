@@ -8,6 +8,10 @@ load:
 
 pipeline:
   # Arguments for HydraPipeline
+  order:
+    - resample
+    - interpolate
+    - scaler_func
   interpolate: false
   resample:
     freq: '5T'

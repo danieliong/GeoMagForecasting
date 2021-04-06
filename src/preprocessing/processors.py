@@ -14,7 +14,12 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.utils.validation import check_is_fitted
 
-from src.storm_utils import iterate_storms_method
+from src.storm_utils import (
+    StormIndexAccessor,
+    StormAccessor,
+    iterate_storms_method,
+    has_storm_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +158,7 @@ class Resampler(TransformerMixin):
 
 class Interpolator(TransformerMixin):
     def __init__(
-        self, method="linear", axis=0, limit_direction="both", limit=15, **kwargs
+        self, method="linear", axis=0, limit_direction="both", limit=15, **kwargs,
     ):
         """Scikit-learn wrapper for Pandas interpolate method
         """
@@ -168,31 +173,43 @@ class Interpolator(TransformerMixin):
         # For compatibility only
         return self
 
-    def _transform_multi_idx(self, X):
+    # def _transform_multi_idx(self, X):
 
-        if isinstance(X, pd.DataFrame):
-            _interpolate = pd.DataFrame.interpolate
-        elif isinstance(X, pd.Series):
-            _interpolate = pd.Series.interpolate
+    #     if isinstance(X, pd.DataFrame):
+    #         _interpolate = pd.DataFrame.interpolate
+    #     elif isinstance(X, pd.Series):
+    #         _interpolate = pd.Series.interpolate
 
-        X = X.groupby(level="storm").apply(
-            _interpolate,
-            method=self.method,
-            axis=self.axis,
-            limit_direction=self.limit_direction,
-            **self.kwargs,
-        )
+    #     X = X.groupby(level="storm").apply(
+    #         _interpolate,
+    #         method=self.method,
+    #         axis=self.axis,
+    #         limit_direction=self.limit_direction,
+    #         **self.kwargs,
+    #     )
 
-        return X
+    #     return X
 
     @iterate_storms_method(drop_storms=True)
-    def transform(self, X, y=None):
+    def _transform(self, X):
         return X.interpolate(
             method=self.method,
             axis=self.axis,
             limit_direction=self.limit_direction,
             **self.kwargs,
         )
+
+    def _transform_time(self, X):
+        X_ = self._transform(X.reset_index(level="storm"))
+        X_.set_index(["storm", X_.index], inplace=True)
+        return X_
+
+    def transform(self, X, y=None):
+
+        if self.method == "time":
+            return self._transform_time(X).squeeze()
+        else:
+            return self._transform(X).squeeze()
 
         # Replaced by iterate_storms_method
         # if isinstance(X.index, pd.MultiIndex):
@@ -365,7 +382,10 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
         return times
 
     @classmethod
+    @iterate_storms_method(storm_params=["times"], drop_storms=True)
     def compute_propagated_times(cls, x_coord, speed, times, freq):
+
+        assert isinstance(times, pd.DatetimeIndex)
 
         delta_x = (x_coord - X0_RE) * KM_PER_RE
         time_delay = pd.to_timedelta(delta_x / speed, unit="sec")
@@ -373,10 +393,7 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
 
         return propagated_time.round(freq)
 
-    @iterate_storms_method(drop_storms=True)
     def transform(self, X):
-        # Needed to transform lagged target the same way as solar wind
-        # TODO: Do this for filters also
 
         required_cols = [self.x_coord_col, self.speed_col]
         if any(col not in X.columns for col in required_cols):
@@ -387,32 +404,40 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
             else:
                 return X
 
-        # TODO: Add code for propagating solar wind
-        # TODO:  Try to use iterate_storms_method decorator here.
-
         X_ = X.copy()
         x_coord = X_[self.x_coord_col]
         speed = X_[self.speed_col]
-        times = X_.index.get_level_values(self.time_level)
+        # times = X_.index.get_level_values(self.time_level)
+
+        # NOTE: Couldn't use iterate_storms_method here because we want to
+        # interpolate x_coord as a whole
+        if x_coord.isna().any():
+            x_coord = Interpolator(method="time").transform(x_coord)
 
         # QUESTION: Should I interpolate, drop, or fill NAs in speed?
         if speed.isna().any():
-            speed.interpolate(method="linear", inplace=True, limit_direction="both")
+            speed = Interpolator().transform(x_coord)
 
         # Set propagated time as new time index
-        X_["propagated_time"] = self.compute_propagated_times(
-            x_coord, speed, times, self.freq
+        X_[self.time_level] = self.compute_propagated_times(
+            x_coord, speed, times=X_.index, freq=self.freq
         )
-        X_.dropna(subset=["propagated_time"], inplace=True)
-        X_.set_index("propagated_time", inplace=True)
-        X_.index.rename(self.time_level, inplace=True)
+        # iterate_storms_method will convert X_.index to time index if it is a
+        # MultiIndex
 
-        # Resample to make time index have the same resolution as original time
-        # REVIEW
-        X_ = X_.resample(self.freq).mean()
+        na_mask = ~X_[self.time_level].isna()
+        X_.where(na_mask, np.nan, inplace=True)
+
+        if has_storm_index(X_):
+            X_.set_index([X_.storms.index, self.time_level], inplace=True)
+            X_ = X_.storms.resample(self.freq, level=self.time_level).mean()
+        else:
+            X_.set_index(self.time_level, inplace=True)
+            # X_.dropna(subset=["propagated_time"], inplace=True)
+            X_ = X_.resample(self.freq).mean()
 
         if self.delete_cols:
-            logger.debug("Dropping x position column...")
+            # logger.debug("Dropping x position column...")
             X_.drop(columns=[self.x_coord_col], inplace=True)
 
         return X_
@@ -620,18 +645,26 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
             logger.debug("Scaler or func was not specified.")
 
     def create_pipeline(self):
-        logger.debug("Creating pipeline...")
+        logger.info("Creating pipeline...")
+
+        for step in self.cfg.order:
+            step_method_name = f"_add_{step}"
+            if step_method_name in dir(self):
+                step_method = eval(f"self.{step_method_name}")
+                step_method()
+            else:
+                logger.debug(f"Pipeline step {step} is not available in HydraPipeline.")
 
         # NOTE: Choose order here.
         # params is added as argument in pipeline_steps decorator
-        self._add_values_filter()
-        self._add_resample()
-        self._add_filter()
-        # QUESTION: Should I propagate before interpolating?
-        self._add_propagate()
-        self._add_interpolate()
-        self._add_delete_cols()
-        self._add_scaler_func()
+        # self._add_values_filter()
+        # self._add_resample()
+        # self._add_filter()
+        # # QUESTION: Should I propagate before interpolating?
+        # self._add_propagate()
+        # self._add_delete_cols()
+        # self._add_interpolate()
+        # self._add_scaler_func()
 
         if self.pipeline_list is not None:
             pipeline = Pipeline(self.pipeline_list)
