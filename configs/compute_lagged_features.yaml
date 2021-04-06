@@ -1,20 +1,20 @@
 # @package _global_
 
-defaults:
-  - target: symh
-  - features: omni
-  - split: timeseries
+# defaults:
+#   - target: symh
+#   - features: ace
+#   - split: storms
 
-overrides: ''
+# overrides: ''
     
 lag: "H"
 exog_lag: "H"
 lead: "H"
 
 hydra:
-  verbose: true
+  verbose: false
   run:
-    dir: outputs/processed_data
+    dir: outputs/lagged_features
   job:
     config:
       override_dirname:
@@ -27,8 +27,10 @@ hydra:
           - target.loading.data_dir
           - features.loading.path
     
+inputs_dir: outputs/processed_data
+          
 inputs:
-  absolute: false
+  absolute: true
   paths:
     features_pipeline: "features_pipeline.pkl"
     target_pipeline: "target_pipeline.pkl"
@@ -36,13 +38,12 @@ inputs:
     train_target: "train_target.pkl"
     test_features: "test_features.pkl"
     test_target: "test_target.pkl"
-    group_labels: "group_labels.pkl"
+    # group_labels: "group_labels.pkl"
 
 
 outputs:
-  output_dir: "lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}"
   X_train: "X_train.npy"
-  y_train: "y_train.npy"
+  y_train: "y_train.pkl"
   X_test: "X_test.npy"
-  y_test: "y_test.npy"
+  y_test: "y_test.pkl"
   lag_processor: "lag_processor.joblib"

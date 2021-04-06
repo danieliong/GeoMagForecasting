@@ -39,17 +39,18 @@ overrides: ''
 experiment_name: geomag_forecasting
 seed: 8686
 
+processed_data_dir: outputs/processed_data
+
 # DON'T OVERRIDE/CHANGE
 load:
   # Keyword arguments for load_processed_data, load_processors in utils
-  inputs_dir: outputs/processed_data/features-${features}/target-${target}/split-${split}/${overrides}/
+  inputs_dir: outputs/lagged_features
   paths:
-    group_labels: group_labels.pkl
-    target_pipeline: target_pipeline.pkl
-    X_train: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/X_train.npy
-    y_train: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/y_train.pkl
-    X_test: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/X_test.npy
-    y_test: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/y_test.pkl
+    target_pipeline: ../processed_data/target_pipeline.pkl
+    X_train: X_train.npy
+    y_train: y_train.pkl
+    X_test: X_test.npy
+    y_test: y_test.pkl
     feature_names: feature_names.pkl
 
 

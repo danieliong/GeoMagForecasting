@@ -191,7 +191,8 @@ def train(cfg):
     from src.storm_utils import StormIndexAccessor, StormAccessor
 
     load_kwargs = cfg.load
-    inputs_dir = load_kwargs.inputs_dir
+    # inputs_dir = load_kwargs.inputs_dir
+    processed_data_dir = cfg.processed_data_dir
 
     cv_method = cfg.cv.method
     cv_init_params = cfg.cv.init_params
@@ -237,8 +238,8 @@ def train(cfg):
 
     with mlflow.start_run(experiment_id=experiment.experiment_id):
 
-        inputs_hydra_dir = Path(to_absolute_path(inputs_dir)) / ".hydra"
-        mlflow.log_artifacts(inputs_hydra_dir, artifact_path="inputs_configs")
+        data_hydra_dir = Path(to_absolute_path(processed_data_dir)) / ".hydra"
+        mlflow.log_artifacts(data_hydra_dir, artifact_path="processed_data_configs")
         mlflow.log_artifacts(".hydra", artifact_path="model_configs")
 
         mlflow.log_param("model", model_name)
