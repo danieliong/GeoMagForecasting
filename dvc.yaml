@@ -15,9 +15,12 @@ stages:
       - params/process_data.yaml
     cmd: python src/process_data.py
     deps:
+      - params/process_data.yaml
       - ${target.load.path}
       - ${features.load.path}
       - ${split.storm_times}
+      - src/preprocessing
+      - src/process_data.py
     params:
       - params/process_data.yaml:
         - start
@@ -33,6 +36,35 @@ stages:
       - ${hydra.run.dir}/${output.train_target} 
       - ${hydra.run.dir}/${output.test_features} 
       - ${hydra.run.dir}/${output.test_target} 
+  compute_lagged_features:
+    vars:
+      - params/compute_lagged_features.yaml:inputs,outputs,hydra
+    cmd: python src/compute_lagged_features.py
+    deps:
+      - params/compute_lagged_features.yaml
+      - ${hydra.run.dir}/${inputs.paths.features_pipeline}
+      - ${hydra.run.dir}/${inputs.paths.target_pipeline} 
+      - ${hydra.run.dir}/${inputs.paths.train_features} 
+      - ${hydra.run.dir}/${inputs.paths.train_target} 
+      - ${hydra.run.dir}/${inputs.paths.test_features} 
+      - ${hydra.run.dir}/${inputs.paths.test_target} 
+      - src/compute_lagged_features.py
+      - src/preprocessing
+    params:
+      - params/compute_lagged_features.yaml:
+          - lag
+          - exog_lag
+          - lead
+          - inputs
+          - target.name
+          - features.name
+          - split.method
+    outs:
+      - ${outputs.output_dir}/${outputs.X_train}
+      - ${outputs.output_dir}/${outputs.y_train}
+      - ${outputs.output_dir}/${outputs.X_test}
+      - ${outputs.output_dir}/${outputs.y_test}
+      - ${outputs.output_dir}/${outputs.lag_processor}
     
   # process_data:
   #   vars:
