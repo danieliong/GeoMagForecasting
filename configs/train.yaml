@@ -50,6 +50,7 @@ load:
     y_train: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/y_train.pkl
     X_test: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/X_test.npy
     y_test: lagged_features/lead-${lead}_lag-${lag}_exog-${exog_lag}/y_test.pkl
+    feature_names: feature_names.pkl
 
 
 # Inverse transform before computing metrics

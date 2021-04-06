@@ -44,6 +44,7 @@ def compute_lagged_features(
 
     if processor is None:
         # Transform lagged y same way as other solar wind features
+        logger.info("Computing lagged features...")
         processor = LaggedFeaturesProcessor(
             transformer_y=transformer_y, lag=lag, exog_lag=exog_lag, lead=lead,
         )
@@ -63,14 +64,21 @@ def main(cfg):
     exog_lag = cfg.exog_lag
     lead = cfg.lead
     outputs = cfg.outputs
-    output_dir = Path(outputs.output_dir)
+    inputs_dir = cfg.inputs_dir
+    # output_dir = Path(outputs.output_dir)
 
     X_train, y_train, processor = compute_lagged_features(
-        lag=lag, exog_lag=exog_lag, lead=lead, train=True, inputs_dir=".", **load_kwargs
+        lag=lag,
+        exog_lag=exog_lag,
+        lead=lead,
+        train=True,
+        inputs_dir=inputs_dir,
+        **load_kwargs,
     )
-    utils.save_output(X_train, output_dir / outputs.X_train)
-    utils.save_output(y_train, output_dir / outputs.y_train)
-    utils.save_output(processor, output_dir / "lag_processor.pkl")
+    utils.save_output(X_train, outputs.X_train)
+    utils.save_output(y_train, outputs.y_train)
+    utils.save_output(processor, "lag_processor.pkl")
+    utils.save_output(processor.feature_names_, "feature_names.pkl")
 
     logger.info("Loading testing data and computing lagged features...")
     X_test, y_test, _ = compute_lagged_features(
@@ -78,12 +86,13 @@ def main(cfg):
         exog_lag=exog_lag,
         lead=lead,
         train=False,
+        inputs_dir=inputs_dir,
         processor=processor,
         **load_kwargs,
     )
 
-    utils.save_output(X_test, output_dir / outputs.X_test)
-    utils.save_output(y_test, output_dir / outputs.y_test)
+    utils.save_output(X_test, outputs.X_test)
+    utils.save_output(y_test, outputs.y_test)
 
 
 if __name__ == "__main__":

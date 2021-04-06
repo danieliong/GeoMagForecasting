@@ -106,12 +106,12 @@ class LaggedFeaturesProcessor:
         if start == end:
             lagged = np.array([])
         else:
-            lagged = np.ravel(y[start:end].to_numpy())
+            lagged = np.ravel(y[start:end][::-1].to_numpy())
 
         if start_exog == end:
             exog = np.array([])
         else:
-            exog = np.ravel(X[start_exog:end].to_numpy())
+            exog = np.ravel(X[start_exog:end][::-1].to_numpy())
 
         feature = np.concatenate((lagged, exog))
 
@@ -146,6 +146,8 @@ class LaggedFeaturesProcessor:
 
         self.n_cols_ = n_lag + n_exog
 
+        self.feature_names_ = self.get_feature_names(X, y)
+
         # NOTE: Don't need resampler. Target is already resampled in process_data
         # pipeline_list = [
         #     # ("resampler", Resampler(freq=self.freq_y_)),
@@ -164,6 +166,31 @@ class LaggedFeaturesProcessor:
             self.transformer_y.fit(y)
 
         return self
+
+    def get_feature_names(self, X, y=None):
+        exog_feature_names = self._get_feature_names(
+            self.exog_lag, X.columns, self.freq_X_
+        )
+
+        if y is None:
+            return exog_feature_names
+
+        lag_feature_names = self._get_feature_names(self.lag, ["y"], self.freq_y_)
+
+        # Lagged y goes first
+        return lag_feature_names + exog_feature_names
+
+    @staticmethod
+    def _get_feature_names(lag, columns, freq):
+        lags_timedelta = pd.timedelta_range(start="0 days", end=lag, freq=freq)
+        # Minutes in reverse order
+        lags = (int(t.seconds / 60) for t in lags_timedelta)
+
+        # Order: Iterate columns first
+        # e.g. [density0, density5, ..., temperature0, temperature5, ....]
+        feature_names = [f"{col}{t}" for t, col in itertools.product(lags, columns)]
+
+        return feature_names
 
     @iterate_storms_method(drop_storms=True)
     def _get_target(self, X, y):

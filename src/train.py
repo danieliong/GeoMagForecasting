@@ -250,6 +250,7 @@ def train(cfg):
         y_train = load_processed_data("y_train", **load_kwargs)
         X_test = load_processed_data("X_test", **load_kwargs)
         y_test = load_processed_data("y_test", **load_kwargs)
+        feature_names = load_processed_data("feature_names", **load_kwargs)
 
         n_train_obs, n_features = X_train.shape
         n_test_obs, _ = y_test.shape
@@ -268,7 +269,7 @@ def train(cfg):
 
         logger.info(f"Fitting model {model_name}...")
         model = get_model(model_name, cfg)
-        model.fit(X_train, y_train, cv=cv)
+        model.fit(X_train, y_train, cv=cv, feature_names=feature_names)
 
         # logger.info("Saving model outputs...")
         # model.save_output()

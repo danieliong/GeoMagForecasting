@@ -78,7 +78,9 @@ class HydraXGB(HydraModel):
 
         self.metrics = self.kwargs.pop("metrics", "rmse")
 
-    def fit(self, X, y, cv=None):
+    def fit(self, X, y, cv=None, feature_names=None):
+
+        self.feature_names_ = feature_names
 
         num_boost_round = self.kwargs.pop("num_boost_round", 100)
         early_stopping_rounds = self.kwargs.pop("early_stopping_rounds", 30)
@@ -89,7 +91,7 @@ class HydraXGB(HydraModel):
         else:
             callbacks = None
 
-        dtrain = xgb.DMatrix(X, label=y)
+        dtrain = xgb.DMatrix(X, label=y, feature_names=self.feature_names_)
 
         if cv is not None:
             self.cv_res_ = xgb.cv(
@@ -120,7 +122,7 @@ class HydraXGB(HydraModel):
         # Check fit was called successfully
         assert self.model is not None
 
-        dtest = xgb.DMatrix(X)
+        dtest = xgb.DMatrix(X, feature_names=self.feature_names_)
 
         ypred = self.model.predict(dtest)
         return ypred
