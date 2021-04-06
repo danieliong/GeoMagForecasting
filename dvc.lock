@@ -4,19 +4,19 @@ stages:
     cmd: python src/concat_configs.py
     deps:
     - path: configs/
-      md5: 3a942c8795d253fd2d68459ca4aa813a.dir
-      size: 10989
+      md5: 886a778e31032d169792957cb0e96f1d.dir
+      size: 10853
       nfiles: 17
     - path: src/concat_configs.py
       md5: 252811f01efc4172e625aae91d815eca
       size: 498
     outs:
     - path: params/compute_lagged_features.yaml
-      md5: bdf968f2a53d08e4d2471b3b03999ca3
-      size: 4423
+      md5: 6179ae8de93473c01078d746bbca80a3
+      size: 5171
     - path: params/process_data.yaml
-      md5: f9030e3d6195e2e4cfcacd26c3d9c52b
-      size: 4916
+      md5: df90c626648c08af16d3ff6983238153
+      size: 4922
     - path: params/train.yaml
       md5: 8fda9fca62e889fee6aaba4a1b33667d
       size: 3992
@@ -32,6 +32,16 @@ stages:
     - path: data/symh.csv
       md5: ce57cb429e285eb69b806e1a2c7c8e5c
       size: 132525924
+    - path: params/process_data.yaml
+      md5: df90c626648c08af16d3ff6983238153
+      size: 4922
+    - path: src/preprocessing
+      md5: 647be61883b3017496ca637b17a9fde7.dir
+      size: 84171
+      nfiles: 13
+    - path: src/process_data.py
+      md5: b6602f57597ebb94bf15f2aaeec5a1c5
+      size: 3938
     params:
       params/process_data.yaml:
         end: '2019-12-31'
@@ -79,6 +89,7 @@ stages:
               bad_values:
               - -9999
               - 999
+              - 999.9
               value_ranges:
                 density:
                 - 0
@@ -114,9 +125,9 @@ stages:
               x_coord_col: ${features.columns.x_coord}
               speed_col: ${features.columns.speed}
               time_level: ${features.columns.times}
+              delete_cols: false
               freq: T
             delete_cols:
-            - ${features.columns.x_coord}
             - ${features.columns.status}
         seed: 8686
         split:
@@ -145,20 +156,20 @@ stages:
               kwargs:
     outs:
     - path: outputs/processed_data/features_pipeline.pkl
-      md5: 187f0fe1e1b8619e649c514a6a1f3a0c
-      size: 11118
+      md5: 860acefe4dcfb6f58fbc3cbe4195d731
+      size: 12392
     - path: outputs/processed_data/target_pipeline.pkl
-      md5: 89556af717a4442bd84ae4f7949cce0e
-      size: 10445
+      md5: 125eb6a357346941edb2178b8eb41c7c
+      size: 11797
     - path: outputs/processed_data/test_features.pkl
-      md5: 396c7fae1417f0bfdc51aa8b91b6c9da
-      size: 1472278
+      md5: 375378f7384a5ac8d68aaad0d5dfe399
+      size: 1477854
     - path: outputs/processed_data/test_target.pkl
-      md5: b690c26b560dee5ef342b468a1a5ee79
+      md5: eb56cb0aba6d9c9ae53342df43358a74
       size: 109500
     - path: outputs/processed_data/train_features.pkl
-      md5: 54111615e8da40987f78f710f1df8314
-      size: 40831745
+      md5: 921dc8a9259424e181266aa1d8074634
+      size: 40877007
     - path: outputs/processed_data/train_target.pkl
       md5: c61c5bed6364c45c684ffb548339096f
       size: 3478396
