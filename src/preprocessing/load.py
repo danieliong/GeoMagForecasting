@@ -235,7 +235,15 @@ def load_processed_data(
     return processed_data
 
 
-def load_processor(name, paths: dict, inputs_dir=None, absolute=True, must_exist=True):
+def load_processor(
+    name_or_path, paths=None, inputs_dir=None, absolute=True, must_exist=True
+):
+    # paths is either dict or None.If None, then name should be a path
+
+    if paths is None:
+        path = name_or_path
+    else:
+        path = paths[name_or_path]
 
     if inputs_dir is None:
         inputs_dir = Path(".")
@@ -243,10 +251,10 @@ def load_processor(name, paths: dict, inputs_dir=None, absolute=True, must_exist
         inputs_dir = Path(inputs_dir)
 
     if absolute:
-        rel_path = inputs_dir / paths[name]
+        rel_path = inputs_dir / path
         path = Path(to_absolute_path(rel_path))
     else:
-        path = inputs_dir / paths[name]
+        path = inputs_dir / path
 
     ext = path.suffix
 
