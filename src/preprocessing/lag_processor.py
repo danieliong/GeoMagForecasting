@@ -35,14 +35,18 @@ class LaggedFeaturesProcessor:
         lag="0T",
         exog_lag="H",
         lead="0T",
+        unit="minutes",
         transformer_y=None,
         njobs=1,
         verbose=False,
         **transformer_y_kwargs,
     ):
-        self.lag = lag
-        self.exog_lag = exog_lag
-        self.lead = lead
+
+        self.unit = unit
+        self.lag = self._process_params(lag)
+        self.exog_lag = self._process_params(exog_lag)
+        self.lead = self._process_params(lead)
+
         self.njobs = njobs
         self.verbose = verbose
 
@@ -51,6 +55,17 @@ class LaggedFeaturesProcessor:
         # (use PandasTransformer if required)
         self.transformer_y = transformer_y
         self.transformer_y_kwargs = transformer_y_kwargs
+
+    def _process_params(self, param):
+
+        assert isinstance(param, (str, int))
+
+        if isinstance(param, str):
+            param = to_offset(param)
+        elif isinstance(param, int):
+            param = to_offset(pd.Timedelta(**{self.unit: param}))
+
+        return param
 
     def _check_data(self, X, y):
         # TODO: Input validation
@@ -121,9 +136,6 @@ class LaggedFeaturesProcessor:
         return feature
 
     def fit(self, X, y):
-        self.lag = to_offset(self.lag)
-        self.exog_lag = to_offset(self.exog_lag)
-        self.lead = to_offset(self.lead)
 
         # TODO: Replace with function from utils
         self.freq_X_ = get_freq(X)
