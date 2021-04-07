@@ -1,20 +1,18 @@
 # @package _global_
 
-# defaults:
-#   - target: symh
-#   - features: ace
-#   - split: storms
+features: ace
+target: symh
+split: storms
+overrides: ''
 
-# overrides: ''
-    
-lag: "H"
-exog_lag: "H"
-lead: "H"
+lag: 60
+exog_lag: 60
+lead: 60
 
 hydra:
   verbose: false
   run:
-    dir: outputs/lagged_features
+    dir: outputs/lagged_features/${features}_${target}_${split}/${lag}_${exog_lag}_${lead}
   job:
     config:
       override_dirname:
@@ -26,8 +24,8 @@ hydra:
           - split
           - target.loading.data_dir
           - features.loading.path
-    
-inputs_dir: outputs/processed_data
+
+inputs_dir: outputs/processed_data/${features}_${target}_${split}/${overrides}
           
 inputs:
   absolute: true
@@ -38,12 +36,11 @@ inputs:
     train_target: "train_target.pkl"
     test_features: "test_features.pkl"
     test_target: "test_target.pkl"
-    # group_labels: "group_labels.pkl"
-
 
 outputs:
   X_train: "X_train.npy"
   y_train: "y_train.pkl"
   X_test: "X_test.npy"
   y_test: "y_test.pkl"
-  lag_processor: "lag_processor.joblib"
+  lag_processor: "lag_processor.pkl"
+  features_name: "features_names.pkl"

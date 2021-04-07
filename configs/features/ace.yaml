@@ -25,7 +25,6 @@ columns:
   x_coord: "x"
   status: [ "status_swepam", "status_mag" ]
     
-# IDEA: Decide order here instead of in HydraPipeline? 
 pipeline:
   # Arguments for HydraPipeline
   order:
