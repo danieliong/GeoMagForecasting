@@ -4,6 +4,8 @@ import hydra
 import pandas as pd
 import numpy as np
 import logging
+import yaml
+import matplotlib.pyplot as plt
 
 from hydra.utils import to_absolute_path, get_original_cwd
 from omegaconf import OmegaConf
@@ -17,9 +19,19 @@ from src import utils
 from src.models import get_model
 from src.preprocessing.lag_processor import LaggedFeaturesProcessor
 from src.preprocessing.load import load_processed_data, load_processor
-from src.storm_utils import StormIndexAccessor, StormAccessor
+from src.storm_utils import has_storm_index, StormIndexAccessor, StormAccessor
 
 logger = logging.getLogger(__name__)
+
+DATA_CONFIGS_TO_LOG = {
+    "start": "start",
+    "end": "end",
+    "target": "target.name",
+    "features_source": "features.name",
+    "features": "features.load.features",
+    "target_processing": "target.pipeline.order",
+    "features_processing": "features.pipeline.order",
+}
 
 
 # DELETE
@@ -149,10 +161,11 @@ def convert_pred_to_pd(ypred, y):
     return ypred
 
 
-def inv_transform_targets(y, ypred, **load_kwargs):
+def inv_transform_targets(y, ypred, path, processor_dir):
 
     logger.debug("Inverse transforming y and predictions...")
-    target_pipeline = load_processor(name="target_pipeline", **load_kwargs)
+
+    target_pipeline = load_processor(path, inputs_dir=processor_dir)
     y = target_pipeline.inverse_transform(y)
     ypred = target_pipeline.inverse_transform(ypred)
 
@@ -182,6 +195,50 @@ def compute_metric(y, ypred, metric):
     return float(metric_val)
 
 
+def plot_predictions(y, ypred, metric):
+    import mlflow
+
+    y = y.squeeze()
+    ypred = ypred.squeeze()
+
+    if has_storm_index(y):
+        # Plot predictions for each storm individually
+
+        for storm in y.storms.level:
+            metric_val = compute_metric(y, ypred, metric)
+            metric_val = round(metric_val, ndigits=3)
+
+            fig, ax = plt.subplots(figsize=(15, 10))
+            y.loc[storm].plot(ax=ax, color="black", linewidth=0.7)
+            ypred.loc[storm].plot(ax=ax, color="red", linewidth=0.7)
+
+            ax.legend(["Truth", "Prediction"])
+            ax.set_title(f"Storm: {storm} [{metric}: {metric_val}]")
+            ax.set_xlabel("")
+
+            mlflow.log_figure(fig, f"prediction_plots/storm_{storm}.png")
+
+    return fig, ax
+
+
+def _compute_lagged_features(lag, exog_lag, lead, save_dir):
+    from src.compute_lagged_features import compute_lagged_features
+
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    config_path = to_absolute_path("configs/compute_lagged_features.yaml")
+    cfg = OmegaConf.load(config_path)
+    OmegaConf.update(cfg, "lag", lag, merge=False)
+    OmegaConf.update(cfg, "exog_lag", exog_lag, merge=False)
+    OmegaConf.update(cfg, "lead", lead, merge=False)
+
+    for name, path in cfg.outputs.items():
+        OmegaConf.update(cfg.outputs, name, str(save_dir / path))
+
+    compute_lagged_features(cfg)
+
+
 # NOTE: Make this return RMSE to use Nevergrad
 @hydra.main(config_path="../configs", config_name="train")
 def train(cfg):
@@ -191,8 +248,8 @@ def train(cfg):
     from src.storm_utils import StormIndexAccessor, StormAccessor
 
     load_kwargs = cfg.load
-    # inputs_dir = load_kwargs.inputs_dir
-    processed_data_dir = cfg.processed_data_dir
+    processed_data_dir = Path(to_absolute_path(cfg.processed_data_dir))
+    target_pipeline_path = cfg.target_pipeline
 
     cv_method = cfg.cv.method
     cv_init_params = cfg.cv.init_params
@@ -206,10 +263,15 @@ def train(cfg):
     metric = cfg.metric
     # seed = cfg.seed
 
-    mlflow.set_experiment(cfg.experiment_name)
-    experiment = mlflow.get_experiment_by_name(cfg.experiment_name)
-    if cfg.experiment_name is not None:
-        logger.debug(f"MLFlow Experiment: {cfg.experiment_name}")
+    experiment_id = OmegaConf.select(cfg, "experiment_id")
+
+    if experiment_id is None and cfg.experiment_name is not None:
+        mlflow.set_experiment(cfg.experiment_name)
+        experiment = mlflow.get_experiment_by_name(cfg.experiment_name)
+        if cfg.experiment_name is not None:
+            logger.debug(f"MLFlow Experiment: {cfg.experiment_name}")
+
+        experiment_id = experiment.experiment_id
 
     orig_cwd = get_original_cwd()
     tracking_uri = f"file://{orig_cwd}/mlruns"
@@ -222,30 +284,32 @@ def train(cfg):
         logger.debug("Turning on xgboost MLFlow autologging...")
         mlflow.xgboost.autolog()
 
-    # # Nest runs if train was run within another run
-    # if mlflow.active_run() is None:
-    #     nested = True
-    #     logger.debug("Nesting MLFlow runs...")
-    # else:
-    #     nested = False
+    with mlflow.start_run(experiment_id=experiment_id):
 
-    # active_run = mlflow.active_run()
-    # if active_run is None:
-    #     run_id = None
-    # else:
-    #     run_id = active_run.info.run_id
-    #     logger.debug(f"Active run_id: {run_id}")
-
-    with mlflow.start_run(experiment_id=experiment.experiment_id):
-
-        data_hydra_dir = Path(to_absolute_path(processed_data_dir)) / ".hydra"
+        data_hydra_dir = processed_data_dir / ".hydra"
+        model_hydra_dir = Path(".hydra")
         mlflow.log_artifacts(data_hydra_dir, artifact_path="processed_data_configs")
-        mlflow.log_artifacts(".hydra", artifact_path="model_configs")
+        mlflow.log_artifacts(model_hydra_dir, artifact_path="model_configs")
+
+        data_cfg = OmegaConf.load(data_hydra_dir / "config.yaml")
+        for name, param_name in DATA_CONFIGS_TO_LOG.items():
+            param = OmegaConf.select(data_cfg, param_name)
+            if param is not None:
+                if isinstance(param, list):
+                    param = ", ".join(param)
+                mlflow.log_param(name, param)
 
         mlflow.log_param("model", model_name)
 
         logger.info("Loading training data and computing lagged features...")
         mlflow.log_params({"lag": lag, "exog_lag": exog_lag, "lead": lead})
+
+        # HACK: Compute lagged features if they haven't been computed yet.
+        inputs_dir = Path(to_absolute_path(load_kwargs.inputs_dir))
+        paths = [inputs_dir / path for path in load_kwargs.paths.values()]
+        if any(not path.exists() for path in paths):
+            # if not inputs_dir.exists():
+            _compute_lagged_features(lag, exog_lag, lead, inputs_dir)
 
         X_train = load_processed_data("X_train", **load_kwargs)
         y_train = load_processed_data("y_train", **load_kwargs)
@@ -272,6 +336,8 @@ def train(cfg):
         model = get_model(model_name, cfg)
         model.fit(X_train, y_train, cv=cv, feature_names=feature_names)
 
+        cv_metric = model.cv_score(X_test, y_test)
+
         # logger.info("Saving model outputs...")
         # model.save_output()
 
@@ -279,16 +345,23 @@ def train(cfg):
         ypred = model.predict(X_test)
         ypred = convert_pred_to_pd(ypred, y_test)
         if inverse_transform:
-            y_test, ypred = inv_transform_targets(y_test, ypred, **load_kwargs)
+            y_test, ypred = inv_transform_targets(
+                y_test,
+                ypred,
+                path=target_pipeline_path,
+                processor_dir=processed_data_dir,
+            )
 
         metric_val = compute_metric(y_test, ypred, metric=metric)
         mlflow.log_metrics({metric: metric_val})
+
+        plot_predictions(y_test, ypred, metric=metric)
 
         logger.info("Saving predictions...")
         utils.save_output(ypred, pred_path)
         mlflow.log_artifact(pred_path)
 
-    return metric_val
+    return cv_metric
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ defaults:
   - cv: storms
 
 hydra:
-  verbose: true
+  verbose: false
   sweep:
     dir: multirun/${model}/${now:%Y-%m-%d_%H-%M}
     subdir: ${hydra.job.override_dirname}
@@ -18,43 +18,47 @@ hydra:
         item_sep: "_"
         exclude_keys:
          - overrides
+  sweeper:
+    parametrization:
+      lag:
+        integer: true
+        init: 60
+        step: 20
+        lower: 40
+        upper: 180
+      exog_lag:
+        integer: true
+        init: 60
+        step: 20
+        lower: 60
+        upper: 180
   
-  # job_logging:
-  #   level: INFO
-  #   handlers:
-  #   - file
-
-# TODO: Change these to numbers  
-lag: "H"
-exog_lag: "H"
-lead: "H"
-
-features: omni
+features: ace
 target: symh
 split: ${cv.method}
-
 # TODO: Figure out how to specify overrrides nicer
 overrides: ''
-
-experiment_name: geomag_forecasting
 seed: 8686
+# mlflow
+experiment_name: geomag_forecasting
 
-processed_data_dir: outputs/processed_data
+lag: 60
+exog_lag: 60
+lead: 60
 
-# DON'T OVERRIDE/CHANGE
+processed_data_dir: outputs/processed_data/${features}_${target}_${split}/${overrides}
+
 load:
   # Keyword arguments for load_processed_data, load_processors in utils
-  inputs_dir: outputs/lagged_features
+  inputs_dir: outputs/lagged_features/${features}_${target}_${split}/${lag}_${exog_lag}_${lead}
   paths:
-    target_pipeline: ../processed_data/target_pipeline.pkl
     X_train: X_train.npy
     y_train: y_train.pkl
     X_test: X_test.npy
     y_test: y_test.pkl
-    feature_names: feature_names.pkl
-
+    feature_names: features_names.pkl
 
 # Inverse transform before computing metrics
 inverse_transform: true
-
+target_pipeline: target_pipeline.pkl
 metric: "rmse"
