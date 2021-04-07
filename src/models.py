@@ -104,10 +104,10 @@ class HydraXGB(HydraModel):
                 callbacks=callbacks,
             )
 
-            metric = (
+            self.metric_ = (
                 self.metrics[-1] if isinstance(self.metrics, list) else self.metrics
             )
-            num_boost_round = np.argmin(self.cv_res_[f"test-{metric}-mean"]) + 1
+            num_boost_round = np.argmin(self.cv_res_[f"test-{self.metric_}-mean"]) + 1
 
         self.model = xgb.train(
             params=self.params,
@@ -117,6 +117,9 @@ class HydraXGB(HydraModel):
         )
 
         return self
+
+    def cv_score(self, X=None, y=None):
+        return float(min(self.cv_res_[f"test-{self.metric_}-mean"]))
 
     def predict(self, X):
         # Check fit was called successfully
