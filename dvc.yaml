@@ -7,20 +7,25 @@ stages:
       - configs/
       - src/concat_configs.py
     outs:
-      - params/process_data.yaml
-      - params/compute_lagged_features.yaml
-      - params/train.yaml
+      # Get error when I just specify params/ here
+      - params/process_data.yaml:
+          cache: false
+      - params/compute_lagged_features.yaml:
+          cache: false
+      - params/train.yaml:
+          cache: false
   process_data:
+    desc: "Process/split data before computing lagged features and fitting models."
     vars:
       - params/process_data.yaml
     cmd: python src/process_data.py
     deps:
-      - params/process_data.yaml
+      - src/preprocessing
+      - src/process_data.py
+      # - params/process_data.yaml
       - ${target.load.path}
       - ${features.load.path}
       - ${split.storm_times}
-      - src/preprocessing
-      - src/process_data.py
     params:
       - params/process_data.yaml:
         - start
@@ -30,93 +35,20 @@ stages:
         - features
         - split
     outs:
-      - ${hydra.run.dir}/${output.features_pipeline}
-      - ${hydra.run.dir}/${output.target_pipeline} 
-      - ${hydra.run.dir}/${output.train_features} 
-      - ${hydra.run.dir}/${output.train_target} 
-      - ${hydra.run.dir}/${output.test_features} 
-      - ${hydra.run.dir}/${output.test_target} 
+      - ${hydra.run.dir}/
   compute_lagged_features:
     vars:
-      - params/compute_lagged_features.yaml:inputs,outputs,hydra
+      - params/compute_lagged_features.yaml
     cmd: python src/compute_lagged_features.py
     deps:
-      - params/compute_lagged_features.yaml
-      - ${hydra.run.dir}/${inputs.paths.features_pipeline}
-      - ${hydra.run.dir}/${inputs.paths.target_pipeline} 
-      - ${hydra.run.dir}/${inputs.paths.train_features} 
-      - ${hydra.run.dir}/${inputs.paths.train_target} 
-      - ${hydra.run.dir}/${inputs.paths.test_features} 
-      - ${hydra.run.dir}/${inputs.paths.test_target} 
       - src/compute_lagged_features.py
-      - src/preprocessing
+      # - params/compute_lagged_features.yaml
+      - ${inputs_dir}/
     params:
       - params/compute_lagged_features.yaml:
           - lag
           - exog_lag
           - lead
           - inputs
-          - target.name
-          - features.name
-          - split.method
     outs:
-      - ${outputs.output_dir}/${outputs.X_train}
-      - ${outputs.output_dir}/${outputs.y_train}
-      - ${outputs.output_dir}/${outputs.X_test}
-      - ${outputs.output_dir}/${outputs.y_test}
-      - ${outputs.output_dir}/${outputs.lag_processor}
-    
-  # process_data:
-  #   vars:
-  #     - configs/preprocessing/config.yaml:output,hydra
-  #     - configs: configs/preprocessing
-    
-  #   foreach:
-  #     - target: symh
-  #       features: ace
-  #       split: storms
-  #   params:
-  #     - target
-  #     - features
-  #     - split
-  #     - ${configs}/config.yaml:
-  #         - start
-  #         - end
-  #         - seed
-  #     - ${configs}/features/${target}.yaml:
-  #         - load
-  #         - pipeline
-  #     - ${configs}/features/${features}.yaml:
-  #         - load
-  #         - pipeline
-  #     - ${configs}/split/${split}.yaml:
-  #         - test_size
-  #   deps:
-  #     - src/process_data.py
-  #     # - ${load.path} 
-  #     # - ${features.load.path}
-  #   outs:
-  #     - ${hydra.run.dir}/${output.features_pipeline} 
-  #     - ${hydra.run.dir}/${output.target_pipeline} 
-  #     - ${hydra.run.dir}/${output.train_features} 
-  #     - ${hydra.run.dir}/${output.train_target} 
-  #     - ${hydra.run.dir}/${output.test_features} 
-  #     - ${hydra.run.dir}/${output.test_target} 
-  #   cmd: python src/process_data.py
-
-  
-  # process_data:
-  #   vars:
-  #     - configs/preprocessing/config.yaml:output
-  #   foreach:
-  #     symh:
-  #       - split=storms
-  #   deps:
-  #     - src/process_data.py
-  #     - configs/preprocessing/config.yaml
-  #     - data/omni_2010-2019.csv.gz
-  #     - data/symh.csv
-  #   outs:
-  #     - ${output}
-  #   cmd: python src/process_data.py target='${key}' '${item}'
-
+      - ${hydra.run.dir}
