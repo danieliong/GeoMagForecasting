@@ -75,7 +75,6 @@ def save_output(obj, path):
 
     """
 
-    # TODO: symlink should be dir name to symlink from
     # TODO: Check that file extensions match object types
     # i.e. .npy -> numpy arrays, etc
 

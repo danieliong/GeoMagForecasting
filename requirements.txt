@@ -43,6 +43,7 @@ tqdm
 # Gradient boosting
 xgboost
 lightgbm
+interpret
 
 # Misc
 dill
