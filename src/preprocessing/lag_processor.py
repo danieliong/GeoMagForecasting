@@ -38,6 +38,7 @@ class LaggedFeaturesProcessor:
         unit="minutes",
         transformer_y=None,
         njobs=1,
+        return_pandas=False,
         verbose=False,
         **transformer_y_kwargs,
     ):
@@ -48,6 +49,7 @@ class LaggedFeaturesProcessor:
         self.lead = self._process_params(lead)
 
         self.njobs = njobs
+        self.return_pandas = return_pandas
         self.verbose = verbose
 
         # NOTE: transformer_y must keep input as pd DataFrame
@@ -249,6 +251,11 @@ class LaggedFeaturesProcessor:
         features = self._transform(X, y_feature, target_index=y_target.index)
 
         assert features.shape[0] == y_target.shape[0]
+
+        if self.return_pandas:
+            features = pd.DataFrame(
+                features, index=y_target.index, columns=self.feature_names_
+            )
 
         return features, y_target
 
