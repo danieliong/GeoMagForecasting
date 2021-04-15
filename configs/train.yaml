@@ -37,7 +37,8 @@ features: ace
 target: symh
 split: ${cv.method}
 # TODO: Figure out how to specify overrrides nicer
-overrides: ''
+data_overrides: ''
+features_overrides: ''
 seed: 8686
 # mlflow
 experiment_name: geomag_forecasting
@@ -46,11 +47,11 @@ lag: 60
 exog_lag: 60
 lead: 60
 
-processed_data_dir: outputs/processed_data/${features}_${target}_${split}/${overrides}
+processed_data_dir: outputs/processed_data/${features}_${target}_${split}/${data_overrides}
 
 load:
   # Keyword arguments for load_processed_data, load_processors in utils
-  inputs_dir: outputs/lagged_features/${features}_${target}_${split}/${lag}_${exog_lag}_${lead}
+  inputs_dir: outputs/lagged_features/${features}_${target}_${split}/${data_overrides}/${lag}_${exog_lag}_${lead}/${features_overrides}
   paths:
     X_train: X_train.npy
     y_train: y_train.pkl

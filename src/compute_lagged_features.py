@@ -16,7 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 def _compute_lagged_features(
-    lag, exog_lag, lead, train=True, processor=None, **load_kwargs
+    lag,
+    exog_lag,
+    lead,
+    train=True,
+    processor=None,
+    inputs_dir=None,
+    load_kwargs={},
+    **processor_kwargs
 ):
 
     # QUESTION: What if there is no processor?
@@ -25,12 +32,12 @@ def _compute_lagged_features(
 
     # Load processed data
     if train:
-        X = load_processed_data("train_features", **load_kwargs)
-        X = load_processed_data("train_features", **load_kwargs)
-        y = load_processed_data("train_target", **load_kwargs)
+        X = load_processed_data("train_features", inputs_dir=inputs_dir, **load_kwargs)
+        X = load_processed_data("train_features", inputs_dir=inputs_dir, **load_kwargs)
+        y = load_processed_data("train_target", inputs_dir=inputs_dir, **load_kwargs)
     else:
-        X = load_processed_data("test_features", **load_kwargs)
-        y = load_processed_data("test_target", **load_kwargs)
+        X = load_processed_data("test_features", inputs_dir=inputs_dir, **load_kwargs)
+        y = load_processed_data("test_target", inputs_dir=inputs_dir, **load_kwargs)
 
     # Load features pipeline
     # QUESTION: What if this is really big?
@@ -38,7 +45,9 @@ def _compute_lagged_features(
     # Resampler is in the pipeline. Fortunately, Resampler doesn't do anything if
     # freq is < data's freq. Find a better way to handle this.
     # IDEA: Remove Resampler?
-    transformer_y = clone(load_processor("features_pipeline", **load_kwargs))
+    transformer_y = clone(
+        load_processor("features_pipeline", inputs_dir=inputs_dir, **load_kwargs)
+    )
     # TODO: Delete Resampler in pipeline
     # It is okay for now because feature freq is probably < target freq.
 
@@ -46,7 +55,11 @@ def _compute_lagged_features(
         # Transform lagged y same way as other solar wind features
         logger.info("Computing lagged features...")
         processor = LaggedFeaturesProcessor(
-            transformer_y=transformer_y, lag=lag, exog_lag=exog_lag, lead=lead,
+            transformer_y=transformer_y,
+            lag=lag,
+            exog_lag=exog_lag,
+            lead=lead,
+            **processor_kwargs,
         )
         processor.fit(X, y)
 
@@ -63,6 +76,7 @@ def compute_lagged_features(cfg):
     lag = cfg.lag
     exog_lag = cfg.exog_lag
     lead = cfg.lead
+    processor_kwargs = cfg.processor
     outputs = cfg.outputs
     inputs_dir = cfg.inputs_dir
     # output_dir = Path(outputs.output_dir)
@@ -73,7 +87,8 @@ def compute_lagged_features(cfg):
         lead=lead,
         train=True,
         inputs_dir=inputs_dir,
-        **load_kwargs,
+        load_kwargs=load_kwargs,
+        **processor_kwargs,
     )
     utils.save_output(X_train, outputs.X_train)
     utils.save_output(y_train, outputs.y_train)
@@ -88,7 +103,8 @@ def compute_lagged_features(cfg):
         train=False,
         inputs_dir=inputs_dir,
         processor=processor,
-        **load_kwargs,
+        load_kwargs=load_kwargs,
+        **processor_kwargs,
     )
 
     utils.save_output(X_test, outputs.X_test)

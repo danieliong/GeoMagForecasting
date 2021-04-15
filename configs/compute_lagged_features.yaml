@@ -9,21 +9,26 @@ lag: 60
 exog_lag: 60
 lead: 60
 
+processor:
+  unit: "minutes"
+  return_pandas: false
+
 hydra:
   verbose: false
   run:
-    dir: outputs/lagged_features/${features}_${target}_${split}/${lag}_${exog_lag}_${lead}
+    dir: outputs/lagged_features/${features}_${target}_${split}/${overrides}/${lag}_${exog_lag}_${lead}/${hydra.job.override_dirname}
   job:
     config:
       override_dirname:
-        kv_sep: "-"
-        item_sep: "_"
+        # kv_sep: "-"
+        # item_sep: "_"
         exclude_keys:
           - target
           - features
           - split
           - target.loading.data_dir
           - features.loading.path
+          - overrides
 
 inputs_dir: outputs/processed_data/${features}_${target}_${split}/${overrides}
           
