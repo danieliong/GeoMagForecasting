@@ -19,6 +19,7 @@ def _compute_lagged_features(
     lag,
     exog_lag,
     lead,
+    history_freq=None,
     train=True,
     processor=None,
     inputs_dir=None,
@@ -55,10 +56,11 @@ def _compute_lagged_features(
         # Transform lagged y same way as other solar wind features
         logger.info("Computing lagged features...")
         processor = LaggedFeaturesProcessor(
-            transformer_y=transformer_y,
             lag=lag,
             exog_lag=exog_lag,
             lead=lead,
+            history_freq=history_freq,
+            transformer_y=transformer_y,
             **processor_kwargs,
         )
         processor.fit(X, y)
@@ -76,7 +78,8 @@ def compute_lagged_features(cfg):
     lag = cfg.lag
     exog_lag = cfg.exog_lag
     lead = cfg.lead
-    processor_kwargs = cfg.processor
+    history_freq = cfg.history_freq
+    processor_kwargs = cfg.lag_processor
     outputs = cfg.outputs
     inputs_dir = cfg.inputs_dir
     # output_dir = Path(outputs.output_dir)
@@ -85,6 +88,7 @@ def compute_lagged_features(cfg):
         lag=lag,
         exog_lag=exog_lag,
         lead=lead,
+        history_freq=history_freq,
         train=True,
         inputs_dir=inputs_dir,
         load_kwargs=load_kwargs,

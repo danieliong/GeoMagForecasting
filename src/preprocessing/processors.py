@@ -45,7 +45,7 @@ def _delete_df_cols(X, cols, errors="ignore", **kwargs):
     return X.drop(columns=cols, errors=errors)
 
 
-class Resampler(TransformerMixin):
+class Resampler(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         freq="T",
@@ -156,7 +156,7 @@ class Resampler(TransformerMixin):
         return X
 
 
-class Interpolator(TransformerMixin):
+class Interpolator(BaseEstimator, TransformerMixin):
     def __init__(
         self, method="linear", axis=0, limit_direction="both", limit=15, **kwargs,
     ):

@@ -8,8 +8,9 @@ overrides: ''
 lag: 60
 exog_lag: 60
 lead: 60
+history_freq: null
 
-processor:
+lag_processor:
   unit: "minutes"
   return_pandas: false
 

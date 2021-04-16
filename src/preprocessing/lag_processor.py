@@ -20,6 +20,8 @@ from src.storm_utils import (
 
 logger = logging.getLogger(__name__)
 
+ZERO_MINUTES = to_offset("0T")
+
 
 class LaggedFeaturesProcessor:
     """
@@ -36,6 +38,8 @@ class LaggedFeaturesProcessor:
         exog_lag="H",
         lead="0T",
         unit="minutes",
+        history_freq=None,
+        history_func="mean",
         transformer_y=None,
         njobs=1,
         return_pandas=False,
@@ -47,6 +51,8 @@ class LaggedFeaturesProcessor:
         self.lag = self._process_params(lag)
         self.exog_lag = self._process_params(exog_lag)
         self.lead = self._process_params(lead)
+        self.history_freq = self._process_params(history_freq)
+        self.history_func = history_func
 
         self.njobs = njobs
         self.return_pandas = return_pandas
@@ -59,6 +65,9 @@ class LaggedFeaturesProcessor:
         self.transformer_y_kwargs = transformer_y_kwargs
 
     def _process_params(self, param):
+
+        if param is None:
+            return None
 
         assert isinstance(param, (str, int))
 
@@ -106,34 +115,35 @@ class LaggedFeaturesProcessor:
             # TODO: Change to elif time index
             target_time = target_index
 
-        # FIXME: When self.lead, self.lag = 0, self.n_cols_ is wrong
-
-        # Get start and end times
+        feature = np.full(self.n_cols_, np.nan)
         end = target_time - self.lead
-        start = end - self.lag
-        start_exog = end - self.exog_lag
-
-        # HACK: Subset storm
-        if has_storm_index(X):
-            X = X.xs(target_storm, level="storm")
-        if has_storm_index(y):
-            y = y.xs(target_storm, level="storm")
 
         # Ravel target and solar wind between start and end time
-        if start == end:
-            lagged = np.array([])
-        else:
-            lagged = np.ravel(y[start:end][::-1].to_numpy())
+        if self.n_lag_ != 0:
+            # HACK: Subset storm
+            if has_storm_index(y):
+                y = y.xs(target_storm, level="storm")
 
-        if start_exog == end:
-            exog = np.array([])
-        else:
-            exog = np.ravel(X[start_exog:end][::-1].to_numpy())
+            if self.history_freq is not None:
+                y = y.resample(self.history_freq, label="right").apply(
+                    self.history_func
+                )
 
-        feature = np.concatenate((lagged, exog))
+            start = end - self.lag
+            feature[: self.n_lag_] = y[start:end][::-1].to_numpy().ravel()
 
-        error_msg = f"Length of feature ({len(feature)}) at {target_index} != self.n_cols_ ({self.n_cols_})"
-        assert len(feature) == self.n_cols_, error_msg
+        if self.n_exog_ != 0:
+            # HACK: Subset storm
+            if has_storm_index(X):
+                X = X.xs(target_storm, level="storm")
+
+            start_exog = end - self.exog_lag
+            feature[self.n_lag_ : self.n_cols_] = (
+                X[start_exog:end][::-1].to_numpy().ravel()
+            )
+
+        # error_msg = f"Length of feature ({len(feature)}) at {target_index} != self.n_cols_ ({self.n_cols_})"
+        # assert len(feature) == self.n_cols_, error_msg
 
         return feature
 
@@ -144,36 +154,26 @@ class LaggedFeaturesProcessor:
         self.freq_y_ = get_freq(y)
 
         # Add ones to get number of features inclusive
-        if self.lag == to_offset("0T"):
-            n_lag = 0
+        if self.lag == ZERO_MINUTES:
+            self.n_lag_ = 0
         else:
-            n_lag = int(self.lag / self.freq_y_) + 1
-        logger.debug("# of lagged features: %s", n_lag)
+            if self.history_freq is not None:
+                self.n_lag_ = int(self.lag / self.history_freq) + 1
+            else:
+                self.n_lag_ = int(self.lag / self.freq_y_) + 1
+        logger.debug("# of lagged features: %s", self.n_lag_)
 
-        if self.exog_lag == to_offset("0T"):
+        if self.exog_lag == ZERO_MINUTES:
             n_exog_each_col = 0
         else:
             n_exog_each_col = int((self.exog_lag / self.freq_X_)) + 1
 
-        n_exog = n_exog_each_col * X.shape[1]
-        logger.debug("# of exogeneous features: %s", n_exog)
+        self.n_exog_ = n_exog_each_col * X.shape[1]
+        logger.debug("# of exogeneous features: %s", self.n_exog_)
 
-        self.n_cols_ = n_lag + n_exog
+        self.n_cols_ = self.n_lag_ + self.n_exog_
 
         self.feature_names_ = self.get_feature_names(X, y)
-
-        # NOTE: Don't need resampler. Target is already resampled in process_data
-        # pipeline_list = [
-        #     # ("resampler", Resampler(freq=self.freq_y_)),
-        #     ("interpolator", Interpolator())
-        # ]
-
-        # if self.transformer_y is not None:
-        #     # NOTE: Pass in clone of feature pipeline for transformer_y
-        #     # transformer_y = _get_callable(self.transformer_y)
-        #     pipeline_list.append(
-        #         ("transformer", self.transformer_y))
-        # self.pipeline_y_ = Pipeline(pipeline_list)
 
         if self.transformer_y is not None:
             self.transformer_y.set_params(**self.transformer_y_kwargs)
@@ -189,7 +189,12 @@ class LaggedFeaturesProcessor:
         if y is None:
             return exog_feature_names
 
-        lag_feature_names = self._get_feature_names(self.lag, ["y"], self.freq_y_)
+        if self.history_freq is None:
+            lag_freq = self.freq_y_
+        else:
+            lag_freq = self.history_freq
+
+        lag_feature_names = self._get_feature_names(self.lag, ["y"], lag_freq)
 
         # Lagged y goes first
         return lag_feature_names + exog_feature_names
@@ -202,7 +207,7 @@ class LaggedFeaturesProcessor:
 
         # Order: Iterate columns first
         # e.g. [density0, density5, ..., temperature0, temperature5, ....]
-        feature_names = [f"{col}{t}" for t, col in itertools.product(lags, columns)]
+        feature_names = [f"{col}_{t}" for t, col in itertools.product(lags, columns)]
 
         return feature_names
 
