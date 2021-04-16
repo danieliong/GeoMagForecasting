@@ -29,10 +29,10 @@ pipeline:
   # Arguments for HydraPipeline
   order:
     - values_filter
-    - resample
     - filter
     - propagate
     - delete_cols
+    - resample
     - interpolate
     - scaler_func
   interpolate:
@@ -41,7 +41,7 @@ pipeline:
     limit_direction: both
     limit: 15
   resample:
-    freq: 'T'
+    freq: '5T'
     func: "mean"
   scaler:
     scaler: null
