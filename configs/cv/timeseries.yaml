@@ -2,7 +2,7 @@
 
 method: "timeseries"
 
-init_params:
+params:
   # Contains keyword arguments for initializing TimeSeriesSplit
   n_splits: 5
   max_train_size: none

@@ -40,10 +40,12 @@ param:
   min_child_weight: 2
   colsample_bytree: 0.8
 
+mlflow: true
+metrics: "rmse"
+  
 kwargs:
   num_boost_round: 30
   early_stopping_rounds: 10
-  metrics: "rmse"
 
 outputs:
   model: "model.xgb"
