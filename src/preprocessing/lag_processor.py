@@ -106,6 +106,8 @@ class LaggedFeaturesProcessor:
         -------
         np.ndarray
             Array containing features to use to predict target at target_time.
+
+        # FIXME: Docstring outdated
         """
 
         # HACK: Assume time is the second element if target_index is MultiIndex tuple
@@ -124,23 +126,24 @@ class LaggedFeaturesProcessor:
             if has_storm_index(y):
                 y = y.xs(target_storm, level="storm")
 
-            if self.history_freq is not None:
-                y = y.resample(self.history_freq, label="right").apply(
-                    self.history_func
-                )
-
             start = end - self.lag
-            feature[: self.n_lag_] = y[start:end][::-1].to_numpy().ravel()
+            y_ = y[start:end][::-1]
 
-        if self.n_exog_ != 0:
+            if self.history_freq is not None:
+                y_ = y_.resample(
+                    self.history_freq, label="right", closed="right", origin="start"
+                ).apply(self.history_func)[::-1]
+
+            feature[: self.n_lag_] = y_[: self.n_lag_].to_numpy().ravel()
+
+        if self.n_exog_each_col_ != 0:
             # HACK: Subset storm
             if has_storm_index(X):
                 X = X.xs(target_storm, level="storm")
 
             start_exog = end - self.exog_lag
-            feature[self.n_lag_ : self.n_cols_] = (
-                X[start_exog:end][::-1].to_numpy().ravel()
-            )
+            X_ = X[start_exog:end][::-1][: self.n_exog_each_col_]
+            feature[self.n_lag_ : self.n_cols_] = X_.to_numpy().ravel()
 
         # error_msg = f"Length of feature ({len(feature)}) at {target_index} != self.n_cols_ ({self.n_cols_})"
         # assert len(feature) == self.n_cols_, error_msg
@@ -153,27 +156,35 @@ class LaggedFeaturesProcessor:
         self.freq_X_ = get_freq(X)
         self.freq_y_ = get_freq(y)
 
-        # Add ones to get number of features inclusive
+        if self.history_freq is not None:
+            # Doesn't make sense to have history_freq < y's freq since there will be
+            # unnecessary NAs
+            assert self.history_freq >= self.freq_y_
+
         if self.lag == ZERO_MINUTES:
             self.n_lag_ = 0
         else:
             if self.history_freq is not None:
-                self.n_lag_ = int(self.lag / self.history_freq) + 1
+                history_freq = self.history_freq
             else:
-                self.n_lag_ = int(self.lag / self.freq_y_) + 1
+                history_freq = self.freq_y_
+
+            self.n_lag_ = int(self.lag / history_freq)
+
         logger.debug("# of lagged features: %s", self.n_lag_)
 
         if self.exog_lag == ZERO_MINUTES:
-            n_exog_each_col = 0
+            self.n_exog_each_col_ = 0
         else:
-            n_exog_each_col = int((self.exog_lag / self.freq_X_)) + 1
+            self.n_exog_each_col_ = int((self.exog_lag / self.freq_X_))
 
-        self.n_exog_ = n_exog_each_col * X.shape[1]
-        logger.debug("# of exogeneous features: %s", self.n_exog_)
+        n_exog = self.n_exog_each_col_ * X.shape[1]
+        logger.debug("# of exogeneous features: %s", n_exog)
 
-        self.n_cols_ = self.n_lag_ + self.n_exog_
+        self.n_cols_ = self.n_lag_ + n_exog
 
         self.feature_names_ = self.get_feature_names(X, y)
+        assert len(self.feature_names_) == self.n_cols_
 
         if self.transformer_y is not None:
             self.transformer_y.set_params(**self.transformer_y_kwargs)
@@ -182,6 +193,7 @@ class LaggedFeaturesProcessor:
         return self
 
     def get_feature_names(self, X, y=None):
+
         exog_feature_names = self._get_feature_names(
             self.exog_lag, X.columns, self.freq_X_
         )
@@ -201,7 +213,9 @@ class LaggedFeaturesProcessor:
 
     @staticmethod
     def _get_feature_names(lag, columns, freq):
-        lags_timedelta = pd.timedelta_range(start="0 days", end=lag, freq=freq)
+        lags_timedelta = pd.timedelta_range(
+            start="0 days", end=lag, freq=freq, closed="left"
+        )
         # Minutes in reverse order
         lags = (int(t.seconds / 60) for t in lags_timedelta)
 
