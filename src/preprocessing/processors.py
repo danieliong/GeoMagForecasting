@@ -14,6 +14,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.utils.validation import check_is_fitted
 
+from src.utils import get_freq
 from src.storm_utils import (
     StormIndexAccessor,
     StormAccessor,
@@ -79,39 +80,12 @@ class Resampler(BaseEstimator, TransformerMixin):
         self.verbose = verbose
         self.kwargs = kwargs
 
-    # TODO: Replace with the one in utils later.
-    def _get_freq_multi_idx(self, X):
-        def _get_freq_one_storm(x):
-            # Infer freq for one storm
-            times = x.index.get_level_values(self.time_col)
-            return to_offset(pd.infer_freq(times))
-
-        # Infer frequency within each storm and get unique frequencies
-        freqs = X.groupby(level=0).apply(_get_freq_one_storm).unique()
-
-        # If there is only one unique frequency
-        if len(freqs) == 1:
-            return freqs[0]
-        else:
-            return None
-
-    def _get_freq(self, X):
-        # HACK: Better way might be to resample before splitting but then the resampler
-        # will not be part of the pipeline
-        # TODO: Figure this out later.
-        if isinstance(X.index, pd.MultiIndex):
-            freq = self._get_freq_multi_idx(X)
-        else:
-            freq = to_offset(pd.infer_freq(X.index))
-
-        return freq
-
     def fit(self, X, y=None):
 
-        if self.func is None:
-            self.func = "mean"
-
-        self.freq = to_offset(self.freq)
+        if self.freq is None:
+            self.freq = get_freq(X)
+        else:
+            self.freq = to_offset(self.freq)
         # self.X_freq_ = self._get_freq(X)
 
         return self
@@ -120,8 +94,7 @@ class Resampler(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         # TODO: Use iterate_storms_method here
 
-        # X_freq = self._get_freq(X)
-        X_freq = to_offset(pd.infer_freq(X.index))
+        X_freq = get_freq(X)
 
         # # Checking frequency is probably unnecessary
         # logger.debug("Inferred Frequency: %s", X_freq)
@@ -134,21 +107,6 @@ class Resampler(BaseEstimator, TransformerMixin):
                 logger.debug(
                     f"Specified frequency ({self.freq}) is <= data frequency ({X_freq}). Resampling is ignored."
                 )
-
-        # Using iterate_storms_method instead
-        # if X_freq is None or self.freq > X_freq:
-        #     if isinstance(X.index, pd.MultiIndex):
-        #         X = (
-        #             X.groupby(level="storm")
-        #             .resample(
-        #                 self.freq, label=self.label, level=self.time_col, **self.kwargs
-        #             )
-        #             .apply(self.func)
-        #         )
-        #     else:
-        #         X = X.resample(self.freq, label=self.label, **self.kwargs).apply(
-        #             self.func
-        #         )
 
         return X
 
@@ -173,23 +131,6 @@ class Interpolator(BaseEstimator, TransformerMixin):
         # For compatibility only
         return self
 
-    # def _transform_multi_idx(self, X):
-
-    #     if isinstance(X, pd.DataFrame):
-    #         _interpolate = pd.DataFrame.interpolate
-    #     elif isinstance(X, pd.Series):
-    #         _interpolate = pd.Series.interpolate
-
-    #     X = X.groupby(level="storm").apply(
-    #         _interpolate,
-    #         method=self.method,
-    #         axis=self.axis,
-    #         limit_direction=self.limit_direction,
-    #         **self.kwargs,
-    #     )
-
-    #     return X
-
     @iterate_storms_method(drop_storms=True)
     def _transform(self, X):
         return X.interpolate(
@@ -210,18 +151,6 @@ class Interpolator(BaseEstimator, TransformerMixin):
             return self._transform_time(X).squeeze()
         else:
             return self._transform(X).squeeze()
-
-        # Replaced by iterate_storms_method
-        # if isinstance(X.index, pd.MultiIndex):
-        #     X = self._transform_multi_idx(X)
-        # else:
-        #     X = X.interpolate(
-        #         method=self.method,
-        #         axis=self.axis,
-        #         limit_direction=self.limit_direction,
-        #         **self.kwargs,
-        #     )
-        # return X
 
     # NOTE: This is for inverse transforming the pipeline when computing metrics later.
     # The only thing that needs to be inversed is the scaler.
@@ -339,6 +268,8 @@ class ValuesFilter(BaseEstimator, TransformerMixin):
 
 
 # REVIEW
+
+
 class SolarWindPropagator(BaseEstimator, TransformerMixin):
     def __init__(
         self,
@@ -364,7 +295,7 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
             assert self.speed_col in X.columns
 
             if self.freq is None:
-                self.freq = pd.infer_freq(X.index)
+                self.freq = get_freq(X)
 
         return self
 
