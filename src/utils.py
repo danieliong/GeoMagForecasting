@@ -83,8 +83,8 @@ def save_output(obj, path):
     if obj is None:
         return None
 
-    orig_cwd = get_original_cwd()
-    logger.debug(f"Original working directory is {orig_cwd}")
+    # orig_cwd = get_original_cwd()
+    # logger.debug(f"Original working directory is {orig_cwd}")
 
     # Example: /home/danieliong/geomag-forecasting/filename
     # orig_path = Path(to_absolute_path(path))
@@ -94,16 +94,30 @@ def save_output(obj, path):
     # output_path = Path(orig_path.name).resolve()
     output_path = Path(path).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    ext = output_path.suffix
 
     if is_pandas(obj):
-        obj.to_pickle(output_path)
+        if ext == ".pkl":
+            obj.to_pickle(output_path)
+        elif ext == ".csv":
+            obj.to_csv(output_path)
+        else:
+            raise ValueError(
+                f"Unsupported file extension {ext} for saving pandas object."
+            )
     elif is_numpy(obj):
-        np.save(output_path, obj)
-
-    else:
+        if ext == ".npy":
+            np.save(output_path, obj)
+        else:
+            np.savetxt(output_path, obj)
+    elif ext == ".joblib":
+        joblib.dump(obj, output_path)
+    elif ext == "pickle":
         with open(output_path, "wb") as f:
-            dill.dump(obj, f)
-            # pickle.dump(obj, f)
+            try:
+                pickle.dump(obj, f)
+            except (pickle.PickleError, pickle.PicklingError):
+                dill.dump(obj, f)
 
     logger.debug(f"Saved output to {path}.")
 
