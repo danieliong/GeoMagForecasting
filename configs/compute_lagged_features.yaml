@@ -30,6 +30,12 @@ hydra:
           - target.loading.data_dir
           - features.loading.path
           - overrides
+          - lag
+          - exog_lag
+          - lead
+          - inputs_dir
+          - inputs
+          - outputs
 
 inputs_dir: outputs/processed_data/${features}_${target}_${split}/${overrides}
           
