@@ -112,12 +112,14 @@ def save_output(obj, path):
             np.savetxt(output_path, obj)
     elif ext == ".joblib":
         joblib.dump(obj, output_path)
-    elif ext == "pickle":
+    elif ext == ".pkl":
         with open(output_path, "wb") as f:
             try:
                 pickle.dump(obj, f)
             except (pickle.PickleError, pickle.PicklingError):
                 dill.dump(obj, f)
+    else:
+        raise ValueError(f"Cannot save {type(obj)} object to {path}.")
 
     logger.debug(f"Saved output to {path}.")
 
