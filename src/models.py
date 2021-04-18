@@ -3,6 +3,7 @@
 import logging
 import json
 import mlflow
+import interpret
 
 import numpy as np
 import pandas as pd
@@ -10,6 +11,8 @@ import xgboost as xgb
 
 from abc import ABC, abstractmethod
 from omegaconf import OmegaConf
+from interpret.glassbox import ExplainableBoostingRegressor
+
 from src.utils import save_output
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,27 @@ class HydraModel(ABC):
         pass
 
     # TODO: Implement general CV
+
+
+class HydraEBM(HydraModel):
+    def __init__(self, cfg, cv=None):
+        super().__init__(cfg, cv=cv)
+        self.model = ExplainableBoostingRegressor(**self.params)
+
+    def fit(self, X, y, feature_names=None):
+        # TODO: Look into how interpret does CV
+        self.feature_names_ = feature_names
+        self.model.set_params(feature_names=feature_names)
+
+        self.model.fit(X, y)
+
+    def predict(self, X):
+        return self.model.predict(X)
+
+    def save_output(self):
+        model_path = getattr(self.outputs, "model", None)
+        if model_path is not None:
+            save_output(self.model, self.outputs["model"])
 
 
 class MLFlowXGBCallback(xgb.callback.TrainingCallback):
@@ -165,7 +189,7 @@ class HydraXGB(HydraModel):
 
 
 # Dictionary with model name as keys and HydraModel class as value
-MODELS_DICT = {"xgboost": HydraXGB}
+MODELS_DICT = {"xgboost": HydraXGB, "ebm": HydraEBM}
 
 
 def get_model(name):
