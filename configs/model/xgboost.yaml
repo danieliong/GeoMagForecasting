@@ -41,7 +41,6 @@ param:
   colsample_bytree: 0.8
 
 mlflow: true
-metrics: "rmse"
   
 kwargs:
   num_boost_round: 30

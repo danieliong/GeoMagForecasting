@@ -85,7 +85,7 @@ def inv_transform_targets(y, ypred, path, processor_dir):
     return y, ypred
 
 
-def compute_metric(y, ypred, metric):
+def compute_metric(y, ypred, metric, storm=None):
     # QUESTION: Should we inverse transform y and ypred before
     # computing metrics?
 
@@ -94,7 +94,10 @@ def compute_metric(y, ypred, metric):
         # Default to rmse
         metric = "rmse"
 
-    logger.debug(f"Computing {metric}...")
+    if storm is None:
+        logger.debug(f"Computing {metric}...")
+    else:
+        logger.debug(f"Computing {metric} for storm {storm}.")
 
     if metric == "rmse":
         metric_val = mean_squared_error(y, ypred, squared=False)
@@ -103,18 +106,24 @@ def compute_metric(y, ypred, metric):
     else:
         raise utils.NotSupportedError(metric, name_type="Metric")
 
-    logger.info(f"{metric}: {metric_val}")
+    if storm is None:
+        logger.info(f"{metric}: {metric_val}")
+    else:
+        logger.info(f"[Storm {storm}] {metric}: {metric_val}")
 
     return float(metric_val)
 
 
-def compute_metrics(y, ypred, metrics):
+def compute_metrics(y, ypred, metrics, storm=None):
 
     if isinstance(metrics, (list, tuple)):
         if len(metrics) > 1:
-            return {metric: compute_metric(y, ypred, metric) for metric in metrics}
+            return {
+                metric: compute_metric(y, ypred, metric, storm=storm)
+                for metric in metrics
+            }
 
-    return compute_metric(y, ypred, metrics)
+    return compute_metric(y, ypred, metrics, storm=storm)
 
 
 def plot_predictions(
@@ -143,7 +152,7 @@ def plot_predictions(
     if has_storm_index(y):
         # Plot predictions for each storm individually
         for storm in y.storms.level:
-            fig, ax = _plot_prediction(y.loc[storm], ypred.loc[storm], metric)
+            fig, ax = _plot_prediction(y, ypred, metric, storm=storm)
 
             if use_mlflow:
                 mlflow.log_figure(fig, f"prediction_plots/storm_{storm}.png")
@@ -163,7 +172,11 @@ def plot_predictions(
 
 
 def _plot_prediction(y, ypred, metric, storm=None):
-    metric_val = compute_metric(y, ypred, metric)
+    if storm is None:
+        metric_val = compute_metric(y, ypred, metric, storm=None)
+    else:
+        metric_val = compute_metric(y.loc[storm], ypred.loc[storm], metric, storm=storm)
+
     metric_val = round(metric_val, ndigits=3)
 
     fig, ax = plt.subplots(figsize=(15, 10))
@@ -179,7 +192,7 @@ def _plot_prediction(y, ypred, metric, storm=None):
 
 
 def compute_lagged_features(lag, exog_lag, lead, save_dir):
-    from src.compute_lagged_features import compute_lagged_features
+    import src.compute_lagged_features as lf
 
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -193,4 +206,4 @@ def compute_lagged_features(lag, exog_lag, lead, save_dir):
     for name, path in cfg.outputs.items():
         OmegaConf.update(cfg.outputs, name, str(save_dir / path))
 
-    compute_lagged_features(cfg)
+    lf.compute_lagged_features(cfg)

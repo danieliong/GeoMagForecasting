@@ -62,4 +62,4 @@ load:
 # Inverse transform before computing metrics
 inverse_transform: true
 target_pipeline: target_pipeline.pkl
-metric: "rmse"
+metrics: "rmse"
