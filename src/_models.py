@@ -73,8 +73,8 @@ class HydraModel(ABC):
 
 
 class HydraEBM(HydraModel):
-    def __init__(self, cfg, cv=None):
-        super().__init__(cfg, cv=cv)
+    def __init__(self, cfg, **kwargs):
+        super().__init__(cfg, **kwargs)
         self.model = ExplainableBoostingRegressor(**self.params)
 
     def fit(self, X, y, feature_names=None):
@@ -94,8 +94,8 @@ class HydraEBM(HydraModel):
 
 
 class HydraXGB(HydraModel):
-    def __init__(self, cfg, cv=None, mlflow=True):
-        super().__init__(cfg, cv=cv, mlflow=mlflow)
+    def __init__(self, cfg, **kwargs):
+        super().__init__(cfg, **kwargs)
         # self.metrics = self.kwargs.pop("metrics", "rmse")
 
     def fit(self, X, y, feature_names=None):
