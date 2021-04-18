@@ -106,6 +106,11 @@ def train(cfg):
     if use_mlflow is None:
         use_mlflow = False
 
+    if use_mlflow:
+        import mlflow
+
+        setup_mlflow(cfg)
+
     # General parameters
     load_kwargs = cfg.load
     processed_data_dir = Path(to_absolute_path(cfg.processed_data_dir))
@@ -113,7 +118,6 @@ def train(cfg):
     inverse_transform = cfg.inverse_transform
     cv_method = cfg.cv.method
     cv_init_params = cfg.cv.params
-
     lag = cfg.lag
     exog_lag = cfg.exog_lag
     lead = cfg.lead
@@ -123,12 +127,6 @@ def train(cfg):
     pred_path = OmegaConf.select(cfg.outputs, "predictions")
     metrics = cfg.metrics
     # seed = cfg.seed
-
-    # TODO: Separate this into another function
-    if use_mlflow:
-        import mlflow
-
-        setup_mlflow(cfg)
 
     logger.info("Loading training data and computing lagged features...")
 
@@ -172,8 +170,8 @@ def train(cfg):
     # QUESTION: compute CV score in score method?
     score = model.cv_score(X_train, y_train)
 
-    # logger.info("Saving model outputs...")
-    # model.save_output()
+    if not use_mlflow:
+        model.save_output()
 
     ###########################################################################
     # Compute/plot/save predictions on test set
@@ -189,10 +187,9 @@ def train(cfg):
 
     logger.info("Saving predictions...")
 
+    utils.save_output(ypred, pred_path)
     if use_mlflow:
         mlflow.log_artifact(pred_path)
-    else:
-        utils.save_output(ypred, pred_path)
 
     # Plot predictions
     plot_predictions(y_test, ypred, metrics=metrics, use_mlflow=use_mlflow)
@@ -201,9 +198,8 @@ def train(cfg):
     # Compute and log test metrics
     ###########################################################################
 
-    test_score = compute_metrics(y_test, ypred, metrics=metrics)
-
     if use_mlflow:
+        test_score = compute_metrics(y_test, ypred, metrics=metrics)
         if isinstance(metrics, (list, tuple)):
             if len(metrics) > 1:
                 for metric in metrics:

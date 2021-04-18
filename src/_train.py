@@ -89,6 +89,11 @@ def compute_metric(y, ypred, metric, storm=None):
     # QUESTION: Should we inverse transform y and ypred before
     # computing metrics?
 
+    if storm is None:
+        y_, ypred_ = y, ypred
+    else:
+        y_, ypred_ = y.storms.get(storm), ypred.storms.get(storm)
+
     if metric is None:
         logger.debug("Metric not given. Defaulting to rmse.")
         # Default to rmse
@@ -100,9 +105,9 @@ def compute_metric(y, ypred, metric, storm=None):
         logger.debug(f"Computing {metric} for storm {storm}.")
 
     if metric == "rmse":
-        metric_val = mean_squared_error(y, ypred, squared=False)
+        metric_val = mean_squared_error(y_, ypred_, squared=False)
     elif metric == "mse":
-        metric_val = mean_squared_error(y, ypred, squared=True)
+        metric_val = mean_squared_error(y_, ypred_, squared=True)
     else:
         raise utils.NotSupportedError(metric, name_type="Metric")
 
@@ -174,14 +179,16 @@ def plot_predictions(
 def _plot_prediction(y, ypred, metric, storm=None):
     if storm is None:
         metric_val = compute_metric(y, ypred, metric, storm=None)
+        y_, ypred_ = y, ypred
     else:
-        metric_val = compute_metric(y.loc[storm], ypred.loc[storm], metric, storm=storm)
+        metric_val = compute_metric(y, ypred, metric, storm=storm)
+        y_, ypred_ = y.storms.get(storm), ypred.storms.get(storm)
 
     metric_val = round(metric_val, ndigits=3)
 
     fig, ax = plt.subplots(figsize=(15, 10))
-    y.plot(ax=ax, color="black", linewidth=0.7)
-    ypred.plot(ax=ax, color="red", linewidth=0.7)
+    y_.plot(ax=ax, color="black", linewidth=0.7)
+    ypred_.plot(ax=ax, color="red", linewidth=0.7)
 
     ax.legend(["Truth", "Prediction"])
     if storm is not None:
