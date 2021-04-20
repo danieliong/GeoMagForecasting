@@ -54,6 +54,10 @@ class HydraModel(ABC):
         self.model = None
         self.cv = cv
 
+    @property
+    def cv_metric(self):
+        return self.metrics[-1] if isinstance(self.metrics, list) else self.metrics
+
     @abstractmethod
     def fit(self, X, y, cv=None, feature_names=None):
         pass
@@ -98,36 +102,39 @@ class HydraXGB(HydraModel):
         super().__init__(cfg, **kwargs)
         # self.metrics = self.kwargs.pop("metrics", "rmse")
 
-    def fit(self, X, y, feature_names=None):
-
-        self.feature_names_ = feature_names
-
+    def cross_validate(self, dtrain):
         num_boost_round = self.kwargs.pop("num_boost_round", 100)
         early_stopping_rounds = self.kwargs.pop("early_stopping_rounds", 30)
-        # metrics = self.kwargs.pop("metrics", "rmse")
 
         if self.mlflow:
             callbacks = [MLFlowXGBCallback()]
         else:
             callbacks = None
 
+        cv_res = xgb.cv(
+            params=self.params,
+            dtrain=dtrain,
+            folds=self.cv,
+            num_boost_round=num_boost_round,
+            early_stopping_rounds=early_stopping_rounds,
+            metrics=self.metrics,
+            callbacks=callbacks,
+        )
+
+        return cv_res
+
+    def fit(self, X, y, feature_names=None):
+
+        self.feature_names_ = feature_names
+
+        # metrics = self.kwargs.pop("metrics", "rmse")
+
         dtrain = xgb.DMatrix(X, label=y, feature_names=self.feature_names_)
 
         if self.cv is not None:
-            self.cv_res_ = xgb.cv(
-                params=self.params,
-                dtrain=dtrain,
-                folds=self.cv,
-                num_boost_round=num_boost_round,
-                early_stopping_rounds=early_stopping_rounds,
-                metrics=self.metrics,
-                callbacks=callbacks,
-            )
+            self.cv_res_ = self.cross_validate(dtrain)
 
-            self.metric_ = (
-                self.metrics[-1] if isinstance(self.metrics, list) else self.metrics
-            )
-            num_boost_round = np.argmin(self.cv_res_[f"test-{self.metric_}-mean"]) + 1
+            num_boost_round = np.argmin(self.cv_res_[f"test-{self.cv_metric}-mean"]) + 1
 
         self.model = xgb.train(
             params=self.params,
@@ -138,10 +145,18 @@ class HydraXGB(HydraModel):
 
         return self
 
-    def cv_score(self, X=None, y=None):
-        # For XGB, CV was done in fit to choose number of trees
-        # so just return results from that
-        return float(min(self.cv_res_[f"test-{self.metric_}-mean"]))
+    def cv_score(self, X, y):
+        assert self.cv is not None, "cv must be specified."
+
+        if hasattr(self, "cv_res_"):
+            # For XGB, CV was done in fit to choose number of trees
+            # so just return results from that
+            cv_res = self.cv_res_
+        else:
+            dtrain = xgb.DMatrix(X, label=y)
+            cv_res = self.cross_validate(dtrain)
+
+        return float(min(cv_res[f"test-{self.cv_metric}-mean"]))
 
     def predict(self, X):
         # Check fit was called successfully
