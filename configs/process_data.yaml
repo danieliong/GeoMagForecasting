@@ -5,6 +5,20 @@ defaults:
   - features: ace
   - split: storms
 
+start: 2010-01-01
+end: 2019-12-31
+seed: 8686
+
+output:
+  # Paths to save output in output directory
+  features_pipeline: features_pipeline.pkl
+  target_pipeline: target_pipeline.pkl
+  train_features: train_features.pkl
+  train_target: train_target.pkl
+  test_features: test_features.pkl
+  test_target: test_target.pkl
+  group_labels: group_labels.pkl
+
 hydra:
   verbose: false
   run:
@@ -21,17 +35,3 @@ hydra:
           - split
           - target.loading.data_dir
           - features.loading.path
-
-start: 2010-01-01
-end: 2019-12-31
-seed: 8686
-
-output:
-  # Paths to save output in output directory
-  features_pipeline: features_pipeline.pkl
-  target_pipeline: target_pipeline.pkl
-  train_features: train_features.pkl
-  train_target: train_target.pkl
-  test_features: test_features.pkl
-  test_target: test_target.pkl
-  group_labels: group_labels.pkl

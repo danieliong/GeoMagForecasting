@@ -18,21 +18,7 @@ hydra:
         item_sep: "_"
         exclude_keys:
          - overrides
-  sweeper:
-    parametrization:
-      lag:
-        integer: true
-        init: 60
-        step: 20
-        lower: 40
-        upper: 180
-      exog_lag:
-        integer: true
-        init: 60
-        step: 20
-        lower: 60
-        upper: 180
-  
+
 features: ace
 target: symh
 split: ${cv.method}
@@ -63,3 +49,6 @@ load:
 inverse_transform: true
 target_pipeline: target_pipeline.pkl
 metrics: "rmse"
+
+outputs:
+  predictions: "ypred.pkl"
