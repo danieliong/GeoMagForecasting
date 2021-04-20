@@ -2,8 +2,9 @@
 
 import logging
 import hydra
-from sklearn.base import clone
+import numpy as np
 
+from sklearn.base import clone
 from pathlib import Path
 from hydra.experimental import compose
 from omegaconf import OmegaConf
@@ -74,6 +75,28 @@ def _compute_lagged_features(
     return X_lagged, y_target, processor
 
 
+def _parse_data_overrides(cfg, override_nodes=["features", "target", "split"]):
+
+    cfg = OmegaConf.to_container(cfg)
+    overrides = []
+
+    # If dictionary is not empty
+    if bool(cfg["data"]):
+        overrides.extend(utils.parse_override(cfg["data"]))
+
+    for node in override_nodes:
+
+        # HACK: Name could either be called name or method (for split)
+        name = cfg[node].pop("name", None)
+        method = cfg[node].pop("method", None)
+        name = method if name is None else name
+        overrides.append("=".join([node, name]))
+
+        overrides.extend(utils.parse_override(cfg[node], node_name=node))
+
+    return overrides
+
+
 @hydra.main(config_path="../configs", config_name="compute_lagged_features")
 def compute_lagged_features(cfg):
 
@@ -87,15 +110,9 @@ def compute_lagged_features(cfg):
     # inputs_dir = cfg.inputs_dir
     # output_dir = Path(outputs.output_dir)
 
-    overrides = [
-        f"features={cfg.features}",
-        f"target={cfg.target}",
-        f"split={cfg.split}",
-    ]
-
-    if not OmegaConf.is_none(cfg, "data"):
-        for key, val in cfg.data.items():
-            overrides.append("=".join([str(key), str(val)]))
+    overrides = _parse_data_overrides(
+        cfg, override_nodes=["features", "target", "split"]
+    )
 
     data_cfg = compose(
         config_name="process_data", return_hydra_config=True, overrides=overrides

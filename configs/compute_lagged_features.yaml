@@ -1,9 +1,13 @@
 # @package _global_
 
-features: ace
-target: symh
-split: storms
-data: {} # For specifying overrides in process_data
+features:
+  name: ace
+  # Any other overrides can go here
+target:
+  name: symh
+split:
+  method: storms
+data: {}
 
 lag: 60
 exog_lag: 60
@@ -24,19 +28,17 @@ outputs:
 hydra:
   verbose: false
   run:
-    dir: outputs/lagged_features/${features}_${target}_${split}/${lag}_${exog_lag}_${lead}/${hydra.job.override_dirname}
+    # dir: outputs/lagged_features/${data.features}_${data.target}_${data.split}/${lag}_${exog_lag}_${lead}/${hydra.job.override_dirname}
+    dir: outputs/lagged_features/${features.name}_${target.name}_${split.method}/${lag}_${exog_lag}_${lead}/${hydra.job.override_dirname}
   job:
     config:
       override_dirname:
         # kv_sep: "-"
         # item_sep: "_"
         exclude_keys:
-          - target
-          - features
-          - split
-          - target.loading.data_dir
-          - features.loading.path
-          - overrides
+          - target.name
+          - features.name
+          - split.method
           - lag
           - exog_lag
           - lead

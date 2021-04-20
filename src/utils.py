@@ -60,6 +60,44 @@ def get_freq(X):
     return freq
 
 
+def parse_override(node_cfg, node_name=None):
+
+    # Return empty list if node_cfg is empty
+    if not bool(node_cfg):
+        return []
+
+    def _parse(key, val, node=None):
+        if isinstance(val, dict):
+            result = []
+            for key2, val2 in val.items():
+                if node is not None:
+                    new_node = f"{node}."
+                else:
+                    new_node = ""
+
+                new_node += key
+                result.append(_parse(key2, val2, new_node))
+        else:
+            if node is not None:
+                result = f"{node}."
+            else:
+                result = ""
+
+            result += "=".join([str(key), str(val)])
+
+        return result
+
+    override_list = []
+    for key, val in node_cfg.items():
+        override = _parse(key, val, node=node_name)
+        if isinstance(override, list):
+            override_list.extend(np.hstack(override))
+        else:
+            override_list.append(override)
+
+    return override_list
+
+
 def save_output(obj, path):
     """Save output object to path.
 
