@@ -5,6 +5,8 @@ import hydra
 from sklearn.base import clone
 
 from pathlib import Path
+from hydra.experimental import compose
+from omegaconf import OmegaConf
 from src import STORM_LEVEL
 from src import utils
 from src.preprocessing.load import load_processed_data, load_processor
@@ -23,8 +25,9 @@ def _compute_lagged_features(
     train=True,
     processor=None,
     inputs_dir=None,
-    load_kwargs={},
-    **processor_kwargs
+    paths=None,
+    # load_kwargs={},
+    **processor_kwargs,
 ):
 
     # QUESTION: What if there is no processor?
@@ -33,12 +36,12 @@ def _compute_lagged_features(
 
     # Load processed data
     if train:
-        X = load_processed_data("train_features", inputs_dir=inputs_dir, **load_kwargs)
-        X = load_processed_data("train_features", inputs_dir=inputs_dir, **load_kwargs)
-        y = load_processed_data("train_target", inputs_dir=inputs_dir, **load_kwargs)
+        X = load_processed_data("train_features", inputs_dir=inputs_dir, paths=paths)
+        X = load_processed_data("train_features", inputs_dir=inputs_dir, paths=paths)
+        y = load_processed_data("train_target", inputs_dir=inputs_dir, paths=paths)
     else:
-        X = load_processed_data("test_features", inputs_dir=inputs_dir, **load_kwargs)
-        y = load_processed_data("test_target", inputs_dir=inputs_dir, **load_kwargs)
+        X = load_processed_data("test_features", inputs_dir=inputs_dir, paths=paths)
+        y = load_processed_data("test_target", inputs_dir=inputs_dir, paths=paths)
 
     # Load features pipeline
     # QUESTION: What if this is really big?
@@ -47,7 +50,7 @@ def _compute_lagged_features(
     # freq is < data's freq. Find a better way to handle this.
     # IDEA: Remove Resampler?
     transformer_y = clone(
-        load_processor("features_pipeline", inputs_dir=inputs_dir, **load_kwargs)
+        load_processor("features_pipeline", inputs_dir=inputs_dir, paths=paths)
     )
     # TODO: Delete Resampler in pipeline
     # It is okay for now because feature freq is probably < target freq.
@@ -74,15 +77,31 @@ def _compute_lagged_features(
 @hydra.main(config_path="../configs", config_name="compute_lagged_features")
 def compute_lagged_features(cfg):
 
-    load_kwargs = cfg.inputs
+    # load_kwargs = cfg.inputs
     lag = cfg.lag
     exog_lag = cfg.exog_lag
     lead = cfg.lead
     history_freq = cfg.history_freq
     processor_kwargs = cfg.lag_processor
     outputs = cfg.outputs
-    inputs_dir = cfg.inputs_dir
+    # inputs_dir = cfg.inputs_dir
     # output_dir = Path(outputs.output_dir)
+
+    overrides = [
+        f"features={cfg.features}",
+        f"target={cfg.target}",
+        f"split={cfg.split}",
+    ]
+
+    if not OmegaConf.is_none(cfg, "data"):
+        for key, val in cfg.data.items():
+            overrides.append("=".join([str(key), str(val)]))
+
+    data_cfg = compose(
+        config_name="process_data", return_hydra_config=True, overrides=overrides
+    )
+    inputs_dir = data_cfg.hydra.run.dir
+    paths = data_cfg.output
 
     X_train, y_train, processor = _compute_lagged_features(
         lag=lag,
@@ -91,7 +110,7 @@ def compute_lagged_features(cfg):
         history_freq=history_freq,
         train=True,
         inputs_dir=inputs_dir,
-        load_kwargs=load_kwargs,
+        paths=paths,
         **processor_kwargs,
     )
     utils.save_output(X_train, outputs.X_train)
@@ -107,7 +126,7 @@ def compute_lagged_features(cfg):
         train=False,
         inputs_dir=inputs_dir,
         processor=processor,
-        load_kwargs=load_kwargs,
+        paths=paths,
         **processor_kwargs,
     )
 

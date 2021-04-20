@@ -3,21 +3,28 @@
 features: ace
 target: symh
 split: storms
-overrides: ''
+data: {} # For specifying overrides in process_data
 
 lag: 60
 exog_lag: 60
 lead: 60
 history_freq: null
-
 lag_processor:
   unit: "minutes"
   return_pandas: false
 
+outputs:
+  X_train: "X_train.npy"
+  y_train: "y_train.pkl"
+  X_test: "X_test.npy"
+  y_test: "y_test.pkl"
+  lag_processor: "lag_processor.pkl"
+  features_name: "features_names.pkl"
+
 hydra:
   verbose: false
   run:
-    dir: outputs/lagged_features/${features}_${target}_${split}/${overrides}/${lag}_${exog_lag}_${lead}/${hydra.job.override_dirname}
+    dir: outputs/lagged_features/${features}_${target}_${split}/${lag}_${exog_lag}_${lead}/${hydra.job.override_dirname}
   job:
     config:
       override_dirname:
@@ -36,23 +43,3 @@ hydra:
           - inputs_dir
           - inputs
           - outputs
-
-inputs_dir: outputs/processed_data/${features}_${target}_${split}/${overrides}
-          
-inputs:
-  absolute: true
-  paths:
-    features_pipeline: "features_pipeline.pkl"
-    target_pipeline: "target_pipeline.pkl"
-    train_features: "train_features.pkl"
-    train_target: "train_target.pkl"
-    test_features: "test_features.pkl"
-    test_target: "test_target.pkl"
-
-outputs:
-  X_train: "X_train.npy"
-  y_train: "y_train.pkl"
-  X_test: "X_test.npy"
-  y_test: "y_test.pkl"
-  lag_processor: "lag_processor.pkl"
-  features_name: "features_names.pkl"

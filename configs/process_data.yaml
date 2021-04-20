@@ -13,8 +13,8 @@ hydra:
   job:
     config:
       override_dirname:
-        kv_sep: '-'
-        item_sep: "_"
+        # kv_sep: '-'
+        # item_sep: "_"
         exclude_keys:
           - target
           - features
