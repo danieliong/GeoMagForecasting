@@ -19,7 +19,7 @@ from src.storm_utils import has_storm_index, StormIndexAccessor, StormAccessor
 logger = logging.getLogger(__name__)
 
 
-def get_cv_split(y, method, init_params, **load_kwargs):
+def get_cv_split(y, method, **init_params):
 
     # Returns None if group_labels doesn't exist (e.g. for cv=timeseries)
     # groups = load_processed_data(name="group_labels", **load_kwargs)
@@ -198,12 +198,32 @@ def _plot_prediction(y, ypred, metric, storm=None):
     return fig, ax
 
 
-def compute_lagged_features(lag, exog_lag, lead, save_dir):
+def _compute_lagged_features(lag, exog_lag, lead, save_dir, overrides=None):
     import src.compute_lagged_features as lf
 
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    # FIXME: Doesn't account for overrides
+    config_path = to_absolute_path("configs/compute_lagged_features.yaml")
+    cfg = OmegaConf.load(config_path)
+    OmegaConf.update(cfg, "lag", lag, merge=False)
+    OmegaConf.update(cfg, "exog_lag", exog_lag, merge=False)
+    OmegaConf.update(cfg, "lead", lead, merge=False)
+
+    for name, path in cfg.outputs.items():
+        OmegaConf.update(cfg.outputs, name, str(save_dir / path))
+
+    lf.compute_lagged_features(cfg)
+
+
+def compute_lagged_features(lag, exog_lag, lead, save_dir, overrides=None):
+    import src.compute_lagged_features as lf
+
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    # FIXME: Doesn't account for overrides
     config_path = to_absolute_path("configs/compute_lagged_features.yaml")
     cfg = OmegaConf.load(config_path)
     OmegaConf.update(cfg, "lag", lag, merge=False)

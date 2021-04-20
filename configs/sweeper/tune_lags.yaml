@@ -1,0 +1,15 @@
+# @package _global_
+
+hydra:
+  sweeper:
+    parametrization:
+      lag:
+        integer: true
+        step: 20
+        lower: 40
+        upper: 180
+      exog_lag:
+        integer: true
+        step: 20
+        lower: 60
+        upper: 180
