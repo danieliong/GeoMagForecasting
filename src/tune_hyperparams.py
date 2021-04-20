@@ -8,12 +8,35 @@ from hydra.utils import to_absolute_path
 from omegaconf import OmegaConf
 from hydra.experimental import compose
 
+from src import utils
 from src.preprocessing.load import load_processed_data, load_processor
 
 from src.models import get_model
 from src._train import compute_lagged_features, get_cv_split
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_overrides(cfg, override_nodes=["data", "target", "features", "split"]):
+
+    cfg = OmegaConf.to_container(cfg)
+    overrides = []
+
+    if bool(cfg["data"]):
+        overrides.extend(utils.parse_override(cfg["data"], node_name="+data"))
+
+    for node in ["target", "features", "split"]:
+        name = cfg[node].pop("name", None)
+        method = cfg[node].pop("method", None)
+
+        if name is not None:
+            overrides.append("=".join([f"{node}.name", name]))
+        elif method is not None:
+            overrides.append("=".join([f"{node}.method", method]))
+
+        overrides.extend(utils.parse_override(cfg[node], node_name=f"+{node}"))
+
+    return overrides
 
 
 @hydra.main(config_path="../configs", config_name="tune_hyperparams")
@@ -29,8 +52,12 @@ def tune_hyperparams(cfg):
     metrics = cfg.metrics
     # seed = cfg.seed
 
+    overrides = _parse_overrides(cfg)
+
     features_cfg = compose(
-        config_name="compute_lagged_features", return_hydra_config=True
+        config_name="compute_lagged_features",
+        return_hydra_config=True,
+        overrides=overrides,
     )
     lag = OmegaConf.select(features_cfg, "lag", default=60)
     exog_lag = OmegaConf.select(features_cfg, "exog_lag", default=60)
