@@ -48,4 +48,5 @@ kwargs:
 
 outputs:
   model: "model.xgb"
-  cv_results: "cv_results.csv"
+  cv_table: "cv_table.csv"
+  cv_results: "cv_results.yaml"

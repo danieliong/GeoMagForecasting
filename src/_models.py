@@ -14,6 +14,7 @@ from omegaconf import OmegaConf
 from interpret.glassbox import ExplainableBoostingRegressor
 
 from src.utils import save_output
+from src.preprocessing.load import load_processor
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class HydraModel(ABC):
             self.kwargs = OmegaConf.to_container(kwargs)
         else:
             logger.debug("No kwargs were passed.")
-            self.kwargs = None
+            self.kwargs = {}
 
         # Required
         outputs = OmegaConf.select(cfg, "outputs")
@@ -86,15 +87,22 @@ class HydraEBM(HydraModel):
         self.feature_names_ = feature_names
         self.model.set_params(feature_names=feature_names)
 
-        self.model.fit(X, y)
+        validation_indices = self.cv[-1][1]
+        self.model.fit(X, y, validation_indices=validation_indices, **self.kwargs)
 
     def predict(self, X):
         return self.model.predict(X)
 
     def save_output(self):
-        model_path = getattr(self.outputs, "model", None)
+        model_path = self.outputs.get("model", None)
         if model_path is not None:
             save_output(self.model, self.outputs["model"])
+
+    def load_model(self, path):
+        return load_processor(path)
+
+    def plot_interpret(self):
+        pass
 
 
 class HydraXGB(HydraModel):
@@ -103,8 +111,8 @@ class HydraXGB(HydraModel):
         # self.metrics = self.kwargs.pop("metrics", "rmse")
 
     def cross_validate(self, dtrain):
-        num_boost_round = self.kwargs.pop("num_boost_round", 100)
-        early_stopping_rounds = self.kwargs.pop("early_stopping_rounds", 30)
+        num_boost_round = getattr(self.kwargs, "num_boost_round", 100)
+        early_stopping_rounds = getattr(self.kwargs, "early_stopping_rounds", 30)
 
         if self.mlflow:
             callbacks = [MLFlowXGBCallback()]
@@ -123,6 +131,10 @@ class HydraXGB(HydraModel):
 
         return cv_res
 
+    def _get_optimal_num_trees(self):
+        assert hasattr(self, "cv_res_")
+        return np.argmin(self.cv_res_[f"test-{self.cv_metric}-mean"]) + 1
+
     def fit(self, X, y, feature_names=None):
 
         self.feature_names_ = feature_names
@@ -131,32 +143,40 @@ class HydraXGB(HydraModel):
 
         dtrain = xgb.DMatrix(X, label=y, feature_names=self.feature_names_)
 
-        if self.cv is not None:
+        if self.cv is not None and not hasattr(self, "cv_res_"):
             self.cv_res_ = self.cross_validate(dtrain)
 
-            num_boost_round = np.argmin(self.cv_res_[f"test-{self.cv_metric}-mean"]) + 1
+        kwargs = self.kwargs.copy()
+        num_boost_round = kwargs.pop("num_boost_round")
+        _ = kwargs.pop("early_stopping_rounds")
+
+        if hasattr(self, "cv_res_"):
+            num_boost_round = self._get_optimal_num_trees()
+
+        # if self.cv is not None:
+        #     if not hasattr(self, "cv_res_"):
+        #         self.cv_res_ = self.cross_validate(dtrain)
+
+        #     num_boost_round = np.argmin(self.cv_res_[f"test-{self.cv_metric}-mean"]) + 1
 
         self.model = xgb.train(
             params=self.params,
             dtrain=dtrain,
             num_boost_round=num_boost_round,
-            **self.kwargs,
+            **kwargs,
         )
 
         return self
 
     def cv_score(self, X, y):
-        assert self.cv is not None, "cv must be specified."
+        # assert self.cv is not None, "cv must be specified."
+        assert self.cv is not None or hasattr(self, "cv_res_")
 
-        if hasattr(self, "cv_res_"):
-            # For XGB, CV was done in fit to choose number of trees
-            # so just return results from that
-            cv_res = self.cv_res_
-        else:
+        if not hasattr(self, "cv_res_"):
             dtrain = xgb.DMatrix(X, label=y)
-            cv_res = self.cross_validate(dtrain)
+            self.cv_res_ = self.cross_validate(dtrain)
 
-        return float(min(cv_res[f"test-{self.cv_metric}-mean"]))
+        return float(min(self.cv_res_[f"test-{self.cv_metric}-mean"]))
 
     def predict(self, X):
         # Check fit was called successfully
@@ -168,15 +188,22 @@ class HydraXGB(HydraModel):
         return ypred
 
     def save_output(self):
-        self.model.save_model(self.outputs["model"])
+        if self.model is not None:
+            self.model.save_model(self.outputs["model"])
 
-        if "cv_results" in self.outputs.keys():
-            if self.outputs["cv_results"] is not None:
-                cv_res = pd.DataFrame(self.cv_res_)
-                cv_res.to_csv(self.outputs["cv_results"])
+        if "cv_table" in self.outputs.keys():
+            if self.outputs["cv_table"] is not None:
+                cv_tbl = pd.DataFrame(self.cv_res_)
+                cv_tbl.to_csv(self.outputs["cv_table"])
 
                 if self.mlflow:
-                    mlflow.log_artifact(self.outputs["cv_results"])
+                    mlflow.log_artifact(self.outputs["cv_table"])
+
+        if "cv_results" in self.outputs.keys():
+            cv_res = OmegaConf.create(
+                {"num_boost_rounds": int(self._get_optimal_num_trees())}
+            )
+            OmegaConf.save(cv_res, self.outputs["cv_results"])
 
 
 class MLFlowXGBCallback(xgb.callback.TrainingCallback):
