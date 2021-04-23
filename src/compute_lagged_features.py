@@ -75,26 +75,26 @@ def _compute_lagged_features(
     return X_lagged, y_target, processor
 
 
-def _parse_data_overrides(cfg, override_nodes=["features", "target", "split"]):
+# def _parse_data_overrides(cfg, override_nodes=["features", "target", "split"]):
 
-    cfg = OmegaConf.to_container(cfg)
-    overrides = []
+#     cfg = OmegaConf.to_container(cfg)
+#     overrides = []
 
-    # If dictionary is not empty
-    if bool(cfg["data"]):
-        overrides.extend(utils.parse_override(cfg["data"]))
+#     # If dictionary is not empty
+#     if bool(cfg["data"]):
+#         overrides.extend(utils.parse_override(cfg["data"]))
 
-    for node in override_nodes:
+#     for node in override_nodes:
 
-        # HACK: Name could either be called name or method (for split)
-        name = cfg[node].pop("name", None)
-        method = cfg[node].pop("method", None)
-        name = method if name is None else name
-        overrides.append("=".join([node, name]))
+#         # HACK: Name could either be called name or method (for split)
+#         name = cfg[node].pop("name", None)
+#         method = cfg[node].pop("method", None)
+#         name = method if name is None else name
+#         overrides.append("=".join([node, name]))
 
-        overrides.extend(utils.parse_override(cfg[node], node_name=node))
+#         overrides.extend(utils.parse_override(cfg[node], node_name=node))
 
-    return overrides
+#     return overrides
 
 
 @hydra.main(config_path="../configs", config_name="compute_lagged_features")
@@ -110,7 +110,7 @@ def compute_lagged_features(cfg):
     # inputs_dir = cfg.inputs_dir
     # output_dir = Path(outputs.output_dir)
 
-    overrides = _parse_data_overrides(
+    overrides = utils.parse_data_overrides(
         cfg, override_nodes=["features", "target", "split"]
     )
 

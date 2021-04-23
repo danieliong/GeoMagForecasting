@@ -17,28 +17,6 @@ from src._train import compute_lagged_features, get_cv_split
 logger = logging.getLogger(__name__)
 
 
-def _parse_overrides(cfg, override_nodes=["data", "target", "features", "split"]):
-
-    cfg = OmegaConf.to_container(cfg)
-    overrides = []
-
-    if bool(cfg["data"]):
-        overrides.extend(utils.parse_override(cfg["data"], node_name="+data"))
-
-    for node in ["target", "features", "split"]:
-        name = cfg[node].pop("name", None)
-        method = cfg[node].pop("method", None)
-
-        if name is not None:
-            overrides.append("=".join([f"{node}.name", name]))
-        elif method is not None:
-            overrides.append("=".join([f"{node}.method", method]))
-
-        overrides.extend(utils.parse_override(cfg[node], node_name=f"+{node}"))
-
-    return overrides
-
-
 @hydra.main(config_path="../configs", config_name="tune_hyperparams")
 def tune_hyperparams(cfg):
     from src.storm_utils import StormIndexAccessor, StormAccessor
@@ -52,7 +30,7 @@ def tune_hyperparams(cfg):
     metrics = cfg.metrics
     # seed = cfg.seed
 
-    overrides = _parse_overrides(cfg)
+    overrides = utils.parse_features_overrides(cfg)
 
     features_cfg = compose(
         config_name="compute_lagged_features",

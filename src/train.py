@@ -13,6 +13,7 @@ from pathlib import Path
 from sklearn.model_selection import TimeSeriesSplit, GroupKFold
 from sklearn.metrics import mean_squared_error
 from sklearn.base import clone
+from hydra.experimental import compose
 
 from src import STORM_LEVEL
 from src import utils
@@ -26,8 +27,10 @@ from src._train import (
     inv_transform_targets,
     compute_metrics,
     plot_predictions,
-    compute_lagged_features,
+    # compute_lagged_features,
+    # parse_overrides,
 )
+from src.compute_lagged_features import compute_lagged_features
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +45,9 @@ DATA_CONFIGS_TO_LOG = {
 }
 
 
-def setup_mlflow(cfg):
+def setup_mlflow(cfg, features_cfg, data_cfg):
     import mlflow
 
-    processed_data_dir = Path(to_absolute_path(cfg.processed_data_dir))
     experiment_id = OmegaConf.select(cfg, "experiment_id")
 
     if experiment_id is None and cfg.experiment_name is not None:
@@ -69,25 +71,27 @@ def setup_mlflow(cfg):
 
     mlflow.start_run(experiment_id=experiment_id)
 
-    data_hydra_dir = processed_data_dir / ".hydra"
-    model_hydra_dir = Path(".hydra")
-    mlflow.log_artifacts(data_hydra_dir, artifact_path="processed_data_configs")
-    mlflow.log_artifacts(model_hydra_dir, artifact_path="model_configs")
+    processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
+    if processed_data_dir is not None:
+        data_hydra_dir = processed_data_dir / ".hydra"
+        mlflow.log_artifacts(data_hydra_dir, artifact_path="processed_data_configs")
+        data_cfg = OmegaConf.load(data_hydra_dir / "config.yaml")
+        for name, param_name in DATA_CONFIGS_TO_LOG.items():
+            param = OmegaConf.select(data_cfg, param_name)
+            if param is not None:
+                if isinstance(param, list):
+                    param = ", ".join(param)
+                mlflow.log_param(name, param)
 
-    data_cfg = OmegaConf.load(data_hydra_dir / "config.yaml")
-    for name, param_name in DATA_CONFIGS_TO_LOG.items():
-        param = OmegaConf.select(data_cfg, param_name)
-        if param is not None:
-            if isinstance(param, list):
-                param = ", ".join(param)
-            mlflow.log_param(name, param)
+    model_hydra_dir = Path(".hydra")
+    mlflow.log_artifacts(model_hydra_dir, artifact_path="model_configs")
 
     mlflow.log_params(
         {
             "model": cfg.model,
-            "lag": cfg.lag,
-            "exog_lag": cfg.exog_lag,
-            "lead": cfg.lead,
+            "lag": features_cfg.lag,
+            "exog_lag": features_cfg.exog_lag,
+            "lead": features_cfg.lead,
             "cv_method": cfg.cv.method,
         }
     )
@@ -101,48 +105,65 @@ def setup_mlflow(cfg):
 def train(cfg):
     from src.storm_utils import StormIndexAccessor, StormAccessor
 
-    # TODO: Change using mlflow to be optional
-    use_mlflow = OmegaConf.select(cfg, "mlflow")
-    if use_mlflow is None:
-        use_mlflow = False
+    features_overrides = utils.parse_features_overrides(cfg)
+    data_overrides = utils.parse_data_overrides(cfg)
+    features_cfg = compose(
+        config_name="compute_lagged_features",
+        return_hydra_config=True,
+        overrides=features_overrides,
+    )
+    data_cfg = compose(
+        config_name="process_data", return_hydra_config=True, overrides=data_overrides,
+    )
 
+    processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
+    inputs_dir = Path(to_absolute_path(features_cfg.hydra.run.dir))
+    paths = features_cfg.outputs
+
+    use_mlflow = OmegaConf.select(cfg, "mlflow", default=False)
     if use_mlflow:
         import mlflow
 
-        setup_mlflow(cfg)
+        setup_mlflow(cfg, features_cfg=features_cfg, data_cfg=data_cfg)
+
+    if any(not (inputs_dir / path).exists() for path in paths.values()):
+        compute_lagged_features(features_cfg)
 
     # General parameters
-    load_kwargs = cfg.load
-    processed_data_dir = Path(to_absolute_path(cfg.processed_data_dir))
+    # load_kwargs = cfg.load
+    # processed_data_dir = Path(to_absolute_path(cfg.processed_data_dir))
     target_pipeline_path = cfg.target_pipeline
     inverse_transform = cfg.inverse_transform
     cv_method = cfg.cv.method
     cv_init_params = cfg.cv.params
-    lag = cfg.lag
-    exog_lag = cfg.exog_lag
-    lead = cfg.lead
+    # lag = cfg.lag
+    # exog_lag = cfg.exog_lag
+    # lead = cfg.lead
 
     # Model specific parameters
     model_name = cfg.model
-    pred_path = OmegaConf.select(cfg.outputs, "predictions")
     metrics = cfg.metrics
+    pred_path = OmegaConf.select(cfg.outputs, "predictions", default="ypred.pkl")
     # seed = cfg.seed
 
     logger.info("Loading training data and computing lagged features...")
 
-    # HACK: Compute lagged features if they haven't been computed yet.
-    inputs_dir = Path(to_absolute_path(load_kwargs.inputs_dir))
-    paths = [inputs_dir / path for path in load_kwargs.paths.values()]
-    if any(not path.exists() for path in paths):
-        # if not inputs_dir.exists():
-        compute_lagged_features(lag, exog_lag, lead, inputs_dir)
+    # # HACK: Compute lagged features if they haven't been computed yet.
+    # inputs_dir = Path(to_absolute_path(load_kwargs.inputs_dir))
+    # paths = [inputs_dir / path for path in load_kwargs.paths.values()]
+    # if any(not path.exists() for path in paths):
+    #     # if not inputs_dir.exists():
+    #     compute_lagged_features(lag, exog_lag, lead, inputs_dir)
 
-    X_train = load_processed_data("X_train", **load_kwargs)
-    y_train = load_processed_data("y_train", **load_kwargs)
-    X_test = load_processed_data("X_test", **load_kwargs)
-    y_test = load_processed_data("y_test", **load_kwargs)
-    feature_names = load_processed_data("feature_names", **load_kwargs)
+    X_train = load_processed_data("X_train", inputs_dir=inputs_dir, paths=paths)
+    y_train = load_processed_data("y_train", inputs_dir=inputs_dir, paths=paths)
+    X_test = load_processed_data("X_test", inputs_dir=inputs_dir, paths=paths)
+    y_test = load_processed_data("y_test", inputs_dir=inputs_dir, paths=paths)
+    feature_names = load_processed_data(
+        "features_names", inputs_dir=inputs_dir, paths=paths
+    )
 
+    # QUESTION: Log everything at end cleaner?
     if use_mlflow:
         n_train_obs, n_features = X_train.shape
         n_test_obs, _ = y_test.shape
@@ -155,20 +176,20 @@ def train(cfg):
         )
 
     logger.info(f"Getting CV split for '{cv_method}' method...")
-    cv = get_cv_split(y_train, cv_method, cv_init_params, **load_kwargs)
-    # QUESTION: What if model fit method doesn't need CV?
+    cv = get_cv_split(y_train, cv_method, **cv_init_params)
+    # QUESTION: Do we still need CV here?
 
     ###########################################################################
     # Fit and evaluate model
     ###########################################################################
 
     logger.info(f"Fitting model {model_name}...")
-    model = get_model(model_name)(cfg, cv=cv, mlflow=use_mlflow)
+    model = get_model(model_name)(cfg, cv=cv, metrics=metrics, mlflow=use_mlflow)
     model.fit(X_train, y_train, feature_names=feature_names)
 
     # TODO: Make this more general. It currently only applies to xgboost
     # QUESTION: compute CV score in score method?
-    score = model.cv_score(X_train, y_train)
+    # score = model.cv_score(X_train, y_train)
 
     if not use_mlflow:
         model.save_output()
@@ -210,7 +231,7 @@ def train(cfg):
     if use_mlflow:
         mlflow.end_run()
 
-    return score
+    # return score
 
 
 if __name__ == "__main__":

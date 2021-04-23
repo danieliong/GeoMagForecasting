@@ -98,6 +98,50 @@ def parse_override(node_cfg, node_name=None):
     return override_list
 
 
+def parse_data_overrides(cfg, override_nodes=["features", "target", "split"]):
+
+    cfg = OmegaConf.to_container(cfg, resolve=True)
+    overrides = []
+
+    # If dictionary is not empty
+    if bool(cfg["data"]):
+        overrides.extend(parse_override(cfg["data"]))
+
+    for node in override_nodes:
+
+        # HACK: Name could either be called name or method (for split)
+        name = cfg[node].pop("name", None)
+        method = cfg[node].pop("method", None)
+        name = method if name is None else name
+        overrides.append("=".join([node, name]))
+
+        overrides.extend(parse_override(cfg[node], node_name=node))
+
+    return overrides
+
+
+def parse_features_overrides(cfg):
+
+    cfg = OmegaConf.to_container(cfg, resolve=True)
+    overrides = []
+
+    if bool(cfg["data"]):
+        overrides.extend(parse_override(cfg["data"], node_name="+data"))
+
+    for node in ["target", "features", "split"]:
+        name = cfg[node].pop("name", None)
+        method = cfg[node].pop("method", None)
+
+        if name is not None:
+            overrides.append("=".join([f"{node}.name", name]))
+        elif method is not None:
+            overrides.append("=".join([f"{node}.method", method]))
+
+        overrides.extend(parse_override(cfg[node], node_name=f"+{node}"))
+
+    return overrides
+
+
 def save_output(obj, path):
     """Save output object to path.
 

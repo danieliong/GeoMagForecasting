@@ -23,7 +23,7 @@ outputs:
   X_test: "X_test.npy"
   y_test: "y_test.pkl"
   lag_processor: "lag_processor.pkl"
-  features_name: "features_names.pkl"
+  features_names: "features_names.pkl"
 
 hydra:
   verbose: false
