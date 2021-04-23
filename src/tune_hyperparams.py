@@ -30,7 +30,7 @@ def tune_hyperparams(cfg):
     metrics = cfg.metrics
     # seed = cfg.seed
 
-    overrides = utils.parse_features_overrides(cfg)
+    overrides = utils.parse_processed_data_overrides(cfg)
 
     features_cfg = compose(
         config_name="compute_lagged_features",

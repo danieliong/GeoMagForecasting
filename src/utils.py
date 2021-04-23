@@ -120,7 +120,7 @@ def parse_data_overrides(cfg, override_nodes=["features", "target", "split"]):
     return overrides
 
 
-def parse_features_overrides(cfg):
+def parse_processed_data_overrides(cfg):
 
     cfg = OmegaConf.to_container(cfg, resolve=True)
     overrides = []

@@ -14,7 +14,8 @@ target:
   name: symh
 split:
   method: ${cv.method}
-  
+lagged_features: {}
+
 seed: 8686
 metrics: "rmse"
 
@@ -46,6 +47,8 @@ outputs:
 
 hydra:
   verbose: false
+  run:
+    dir: outputs/train/${model}/${now:%Y-%m-%d_%H-%M}
   sweep:
     dir: multirun/${model}/${now:%Y-%m-%d_%H-%M}
     subdir: ${hydra.job.override_dirname}

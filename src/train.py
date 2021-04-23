@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import hydra
 import pandas as pd
 import numpy as np
@@ -8,7 +9,7 @@ import yaml
 import matplotlib.pyplot as plt
 
 from hydra.utils import to_absolute_path, get_original_cwd
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, open_dict
 from pathlib import Path
 from sklearn.model_selection import TimeSeriesSplit, GroupKFold
 from sklearn.metrics import mean_squared_error
@@ -66,7 +67,7 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
     if cfg.model == "xgboost":
         import mlflow.xgboost
 
-        logger.debug("Turning on xgboost MLFlow autologging...")
+        logger.debug("Turning on MLFlow autologging for XGBoost...")
         mlflow.xgboost.autolog()
 
     mlflow.start_run(experiment_id=experiment_id)
@@ -105,29 +106,42 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
 def train(cfg):
     from src.storm_utils import StormIndexAccessor, StormAccessor
 
-    features_overrides = utils.parse_features_overrides(cfg)
+    # Get data configs/overrides
     data_overrides = utils.parse_data_overrides(cfg)
+    data_cfg = compose(
+        config_name="process_data", return_hydra_config=True, overrides=data_overrides,
+    )
+
+    # Get features configs/overrides
+    features_overrides = utils.parse_processed_data_overrides(cfg)
+    features_overrides.extend(utils.parse_override(cfg.lagged_features))
     features_cfg = compose(
         config_name="compute_lagged_features",
         return_hydra_config=True,
         overrides=features_overrides,
-    )
-    data_cfg = compose(
-        config_name="process_data", return_hydra_config=True, overrides=data_overrides,
     )
 
     processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
     inputs_dir = Path(to_absolute_path(features_cfg.hydra.run.dir))
     paths = features_cfg.outputs
 
+    # Setup mlflow
     use_mlflow = OmegaConf.select(cfg, "mlflow", default=False)
     if use_mlflow:
         import mlflow
 
         setup_mlflow(cfg, features_cfg=features_cfg, data_cfg=data_cfg)
 
+    # Compute lagged features if they haven't been computed yet
     if any(not (inputs_dir / path).exists() for path in paths.values()):
-        compute_lagged_features(features_cfg)
+        inputs_dir.mkdir(parents=True, exist_ok=True)
+        cwd = os.getcwd()
+        os.chdir(inputs_dir)
+        lagged_features_cfg = features_cfg.copy()
+        with open_dict(lagged_features_cfg):
+            _ = lagged_features_cfg.pop("hydra")
+        compute_lagged_features(lagged_features_cfg)
+        os.chdir(cwd)
 
     # General parameters
     # load_kwargs = cfg.load

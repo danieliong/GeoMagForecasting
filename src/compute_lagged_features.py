@@ -133,7 +133,7 @@ def compute_lagged_features(cfg):
     utils.save_output(X_train, outputs.X_train)
     utils.save_output(y_train, outputs.y_train)
     utils.save_output(processor, outputs.lag_processor)
-    utils.save_output(processor.feature_names_, outputs.features_name)
+    utils.save_output(processor.feature_names_, outputs.features_names)
 
     logger.info("Loading testing data and computing lagged features...")
     X_test, y_test, _ = _compute_lagged_features(
