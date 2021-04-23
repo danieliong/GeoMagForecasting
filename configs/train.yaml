@@ -45,6 +45,9 @@ target_pipeline: target_pipeline.pkl
 outputs:
   predictions: "ypred.pkl"
 
+plot:
+  persistence: true
+  
 hydra:
   verbose: false
   run:

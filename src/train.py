@@ -227,7 +227,14 @@ def train(cfg):
         mlflow.log_artifact(pred_path)
 
     # Plot predictions
-    plot_predictions(y_test, ypred, metrics=metrics, use_mlflow=use_mlflow)
+    plot_predictions(
+        y_test,
+        ypred,
+        metrics=metrics,
+        use_mlflow=use_mlflow,
+        persistence=cfg.plot.persistence,
+        lead=features_cfg.lead,
+    )
 
     ###########################################################################
     # Compute and log test metrics

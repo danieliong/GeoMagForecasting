@@ -9,7 +9,9 @@ from hydra.utils import to_absolute_path
 from omegaconf import OmegaConf
 from pathlib import Path
 from sklearn.model_selection import TimeSeriesSplit, GroupKFold
-from sklearn.metrics import mean_squared_error
+from pandas.tseries.frequencies import to_offset
+
+# from sklearn.metrics import mean_squared_error
 
 from src import utils
 from src.preprocessing.load import load_processed_data, load_processor
@@ -85,6 +87,14 @@ def inv_transform_targets(y, ypred, path, processor_dir):
     return y, ypred
 
 
+def mean_squared_error(y, ypred, *, squared=False):
+    mse = np.mean((y - ypred) ** 2)
+    if not squared:
+        return np.sqrt(mse)
+
+    return mse
+
+
 def compute_metric(y, ypred, metric, storm=None):
     # QUESTION: Should we inverse transform y and ypred before
     # computing metrics?
@@ -132,7 +142,14 @@ def compute_metrics(y, ypred, metrics, storm=None):
 
 
 def plot_predictions(
-    y, ypred, metrics, use_mlflow=True, pdf_path="prediction_plots.pdf"
+    y,
+    ypred,
+    metrics,
+    use_mlflow=False,
+    pdf_path="prediction_plots.pdf",
+    persistence=False,
+    lead=None,
+    unit="minutes",
 ):
     if use_mlflow:
         import mlflow
@@ -157,14 +174,24 @@ def plot_predictions(
     if has_storm_index(y):
         # Plot predictions for each storm individually
         for storm in y.storms.level:
-            fig, ax = _plot_prediction(y, ypred, metric, storm=storm)
+            fig, ax = _plot_prediction(
+                y,
+                ypred,
+                metric,
+                storm=storm,
+                persistence=persistence,
+                lead=lead,
+                unit=unit,
+            )
 
             if use_mlflow:
                 mlflow.log_figure(fig, f"prediction_plots/storm_{storm}.png")
             elif pdf_path is not None:
                 pdf.savefig(fig)
     else:
-        fig, ax = _plot_prediction(y, ypred, metric)
+        fig, ax = _plot_prediction(
+            y, ypred, metric, persistence=persistence, lead=lead, unit=unit
+        )
         if use_mlflow:
             mlflow.log_figure(fig, "prediction_plot.png")
         elif pdf_path is not None:
@@ -176,7 +203,9 @@ def plot_predictions(
     return fig, ax
 
 
-def _plot_prediction(y, ypred, metric, storm=None):
+def _plot_prediction(y, ypred, metric, storm, persistence, lead, unit):
+    # TODO: Plot persistence predictions
+
     if storm is None:
         metric_val = compute_metric(y, ypred, metric, storm=None)
         y_, ypred_ = y, ypred
@@ -184,15 +213,29 @@ def _plot_prediction(y, ypred, metric, storm=None):
         metric_val = compute_metric(y, ypred, metric, storm=storm)
         y_, ypred_ = y.storms.get(storm), ypred.storms.get(storm)
 
+    if isinstance(lead, str):
+        lead = to_offset(lead)
+    elif isinstance(lead, int):
+        lead = to_offset(pd.Timedelta(**{unit: lead}))
+
     metric_val = round(metric_val, ndigits=3)
 
     fig, ax = plt.subplots(figsize=(15, 10))
     y_.plot(ax=ax, color="black", linewidth=0.7)
     ypred_.plot(ax=ax, color="red", linewidth=0.7)
+    legend = ["Truth", f"Prediction [{metric}: {metric_val}]"]
 
-    ax.legend(["Truth", "Prediction"])
+    if persistence:
+        assert lead is not None, "Lead must be specified if persistence=True"
+        ypers = y_.shift(periods=1, freq=lead)
+        pers_metric = compute_metric(y_, ypers, metric, storm=None)
+        pers_metric = round(pers_metric, ndigits=3)
+        ypers.plot(ax=ax, color="blue", linewidth=0.5, linestyle="dashed")
+        legend.append(f"Persistence [{metric}: {pers_metric}]")
+
+    ax.legend(legend)
     if storm is not None:
-        ax.set_title(f"Storm: {storm} [{metric}: {metric_val}]")
+        ax.set_title(f"Storm #{storm}")
     ax.set_xlabel("")
 
     return fig, ax
