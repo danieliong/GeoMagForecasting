@@ -136,7 +136,7 @@ def plot_predictions(
 ):
     if use_mlflow:
         import mlflow
-    else:
+    elif pdf_path is not None:
         # Save plots into pdf instead
         from matplotlib.backends.backend_pdf import PdfPages
 
@@ -161,13 +161,13 @@ def plot_predictions(
 
             if use_mlflow:
                 mlflow.log_figure(fig, f"prediction_plots/storm_{storm}.png")
-            else:
+            elif pdf_path is not None:
                 pdf.savefig(fig)
     else:
         fig, ax = _plot_prediction(y, ypred, metric)
         if use_mlflow:
             mlflow.log_figure(fig, "prediction_plot.png")
-        else:
+        elif pdf_path is not None:
             pdf.savefig(fig)
 
     if not use_mlflow:

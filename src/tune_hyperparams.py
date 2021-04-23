@@ -59,6 +59,9 @@ def tune_hyperparams(cfg):
     cv_score = model.cv_score(X_train, y_train)
     logger.info(f"CV score: {cv_score}")
 
+    model.save_output()
+    # utils.save_output(model, cfg.outputs.hydra_model)
+
     return cv_score
 
 
