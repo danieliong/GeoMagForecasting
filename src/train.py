@@ -64,13 +64,13 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
     mlflow.set_tracking_uri(tracking_uri)
     logger.debug(f"MLFlow Tracking URI: {tracking_uri}")
 
-    if cfg.model == "xgboost":
-        import mlflow.xgboost
+    # if cfg.model == "xgboost":
+    #     import mlflow.xgboost
 
-        logger.debug("Turning on MLFlow autologging for XGBoost...")
-        mlflow.xgboost.autolog()
+    #     logger.debug("Turning on MLFlow autologging for XGBoost...")
+    #     mlflow.xgboost.autolog()
 
-    mlflow.start_run(experiment_id=experiment_id)
+    run = mlflow.start_run(experiment_id=experiment_id)
 
     processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
     if processed_data_dir is not None:
@@ -98,7 +98,7 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
     )
     mlflow.log_params(cfg.cv.params)
 
-    return
+    return run
 
 
 # NOTE: Make this return RMSE to use Nevergrad
@@ -130,7 +130,7 @@ def train(cfg):
     if use_mlflow:
         import mlflow
 
-        setup_mlflow(cfg, features_cfg=features_cfg, data_cfg=data_cfg)
+        run = setup_mlflow(cfg, features_cfg=features_cfg, data_cfg=data_cfg)
 
     # Compute lagged features if they haven't been computed yet
     if any(not (inputs_dir / path).exists() for path in paths.values()):
@@ -205,8 +205,7 @@ def train(cfg):
     # QUESTION: compute CV score in score method?
     # score = model.cv_score(X_train, y_train)
 
-    if not use_mlflow:
-        model.save_output()
+    model.save_output()
 
     ###########################################################################
     # Compute/plot/save predictions on test set
