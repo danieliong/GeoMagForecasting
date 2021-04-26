@@ -13,6 +13,7 @@ from pandas.tseries.frequencies import to_offset
 
 # from sklearn.metrics import mean_squared_error
 
+from src import STORM_LEVEL
 from src import utils
 from src.preprocessing.load import load_processed_data, load_processor
 from src.storm_utils import has_storm_index, StormIndexAccessor, StormAccessor
@@ -141,104 +142,104 @@ def compute_metrics(y, ypred, metrics, storm=None):
     return compute_metric(y, ypred, metrics, storm=storm)
 
 
-def plot_predictions(
-    y,
-    ypred,
-    metrics,
-    use_mlflow=False,
-    pdf_path="prediction_plots.pdf",
-    persistence=False,
-    lead=None,
-    unit="minutes",
-):
-    if use_mlflow:
-        import mlflow
-    elif pdf_path is not None:
-        # Save plots into pdf instead
-        from matplotlib.backends.backend_pdf import PdfPages
+# def plot_predictions(
+#     y,
+#     ypred,
+#     metrics,
+#     use_mlflow=False,
+#     pdf_path="prediction_plots.pdf",
+#     persistence=False,
+#     lead=None,
+#     unit="minutes",
+# ):
+#     if use_mlflow:
+#         import mlflow
+#     elif pdf_path is not None:
+#         # Save plots into pdf instead
+#         from matplotlib.backends.backend_pdf import PdfPages
 
-        pdf = PdfPages(pdf_path)
+#         pdf = PdfPages(pdf_path)
 
-    # Use last metric if there are more than one
-    if isinstance(metrics, (list, tuple)):
-        if len(metrics) > 1:
-            metric = metrics[-1]
-        else:
-            metric = metrics[0]
-    else:
-        metric = metrics
+#     # Use last metric if there are more than one
+#     if isinstance(metrics, (list, tuple)):
+#         if len(metrics) > 1:
+#             metric = metrics[-1]
+#         else:
+#             metric = metrics[0]
+#     else:
+#         metric = metrics
 
-    y = y.squeeze()
-    ypred = ypred.squeeze()
+#     y = y.squeeze()
+#     ypred = ypred.squeeze()
 
-    if has_storm_index(y):
-        # Plot predictions for each storm individually
-        for storm in y.storms.level:
-            fig, ax = _plot_prediction(
-                y,
-                ypred,
-                metric,
-                storm=storm,
-                persistence=persistence,
-                lead=lead,
-                unit=unit,
-            )
+#     if has_storm_index(y):
+#         # Plot predictions for each storm individually
+#         for storm in y.storms.level:
+#             fig, ax = _plot_prediction(
+#                 y,
+#                 ypred,
+#                 metric,
+#                 storm=storm,
+#                 persistence=persistence,
+#                 lead=lead,
+#                 unit=unit,
+#             )
 
-            if use_mlflow:
-                mlflow.log_figure(fig, f"prediction_plots/storm_{storm}.png")
-            elif pdf_path is not None:
-                pdf.savefig(fig)
-    else:
-        fig, ax = _plot_prediction(
-            y, ypred, metric, persistence=persistence, lead=lead, unit=unit
-        )
-        if use_mlflow:
-            mlflow.log_figure(fig, "prediction_plot.png")
-        elif pdf_path is not None:
-            pdf.savefig(fig)
+#             if use_mlflow:
+#                 mlflow.log_figure(fig, f"prediction_plots/storm_{storm}.png")
+#             elif pdf_path is not None:
+#                 pdf.savefig(fig)
+#     else:
+#         fig, ax = _plot_prediction(
+#             y, ypred, metric, persistence=persistence, lead=lead, unit=unit
+#         )
+#         if use_mlflow:
+#             mlflow.log_figure(fig, "prediction_plot.png")
+#         elif pdf_path is not None:
+#             pdf.savefig(fig)
 
-    if not use_mlflow:
-        pdf.close()
+#     if not use_mlflow:
+#         pdf.close()
 
-    return fig, ax
+#     return fig, ax
 
 
-def _plot_prediction(y, ypred, metric, storm, persistence, lead, unit):
-    # TODO: Plot persistence predictions
+# def _plot_prediction(y, ypred, metric, storm, persistence, lead, unit):
+#     # TODO: Plot persistence predictions
 
-    if storm is None:
-        metric_val = compute_metric(y, ypred, metric, storm=None)
-        y_, ypred_ = y, ypred
-    else:
-        metric_val = compute_metric(y, ypred, metric, storm=storm)
-        y_, ypred_ = y.storms.get(storm), ypred.storms.get(storm)
+#     if storm is None:
+#         metric_val = compute_metric(y, ypred, metric, storm=None)
+#         y_, ypred_ = y, ypred
+#     else:
+#         metric_val = compute_metric(y, ypred, metric, storm=storm)
+#         y_, ypred_ = y.storms.get(storm), ypred.storms.get(storm)
 
-    if isinstance(lead, str):
-        lead = to_offset(lead)
-    elif isinstance(lead, int):
-        lead = to_offset(pd.Timedelta(**{unit: lead}))
+#     if isinstance(lead, str):
+#         lead = to_offset(lead)
+#     elif isinstance(lead, int):
+#         lead = to_offset(pd.Timedelta(**{unit: lead}))
 
-    metric_val = round(metric_val, ndigits=3)
+#     metric_val = round(metric_val, ndigits=3)
 
-    fig, ax = plt.subplots(figsize=(15, 10))
-    y_.plot(ax=ax, color="black", linewidth=0.7)
-    ypred_.plot(ax=ax, color="red", linewidth=0.7)
-    legend = ["Truth", f"Prediction [{metric}: {metric_val}]"]
+#     fig, ax = plt.subplots(figsize=(15, 10))
+#     y_.plot(ax=ax, color="black", linewidth=0.7)
+#     ypred_.plot(ax=ax, color="red", linewidth=0.7)
+#     legend = ["Truth", f"Prediction [{metric}: {metric_val}]"]
 
-    if persistence:
-        assert lead is not None, "Lead must be specified if persistence=True"
-        ypers = y_.shift(periods=1, freq=lead)
-        pers_metric = compute_metric(y_, ypers, metric, storm=None)
-        pers_metric = round(pers_metric, ndigits=3)
-        ypers.plot(ax=ax, color="blue", linewidth=0.5, linestyle="dashed")
-        legend.append(f"Persistence [{metric}: {pers_metric}]")
+#     if persistence:
+#         assert lead is not None, "Lead must be specified if persistence=True"
+#         ypers = y_.shift(periods=1, freq=lead)
+#         pers_metric = compute_metric(y_, ypers, metric, storm=None)
+#         pers_metric = round(pers_metric, ndigits=3)
+#         ypers.plot(ax=ax, color="blue", linewidth=0.5, linestyle="dashed")
+#         legend.append(f"Persistence [{metric}: {pers_metric}]")
 
-    ax.legend(legend)
-    if storm is not None:
-        ax.set_title(f"Storm #{storm}")
-    ax.set_xlabel("")
+#     ax.legend(legend)
+#     if storm is not None:
+#         ax.set_title(f"Storm #{storm}")
+#     ax.set_xlabel("")
 
-    return fig, ax
+#     return fig, ax
 
 
 def _compute_lagged_features(lag, exog_lag, lead, save_dir, overrides=None):
@@ -277,3 +278,18 @@ def compute_lagged_features(lag, exog_lag, lead, save_dir, overrides=None):
         OmegaConf.update(cfg.outputs, name, str(save_dir / path))
 
     lf.compute_lagged_features(cfg)
+
+
+def predict_persistence(y, lead, unit="minutes"):
+
+    if isinstance(lead, str):
+        lead = to_offset(lead)
+    elif isinstance(lead, int):
+        lead = to_offset(pd.Timedelta(**{unit: lead}))
+
+    if has_storm_index(y):
+        return y.storms.apply(
+            lambda x: x.droplevel(STORM_LEVEL).shift(periods=1, freq=lead)
+        )
+    else:
+        return y.shift(periods=1, freq=lead)
