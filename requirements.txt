@@ -21,29 +21,21 @@ python-language-server[all]
 hydra-core>=1.0
 hydra-nevergrad-sweeper
 hydra-submitit-launcher
-
-# Needed to get rid of error in hydra
-omegaconf>=2.1.0dev21
-
+omegaconf>=2.1.0dev21 # Needed to get rid of error in hydra
 mlflow
-
 # Data processing
 numpy
 pandas
 scikit-learn
 statsmodels
-
 # Plotting
 matplotlib
-
 # Logging
 loguru
 tqdm
-
 # Gradient boosting
 xgboost
 lightgbm
 interpret
-
 # Misc
 dill

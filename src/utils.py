@@ -206,56 +206,56 @@ def save_output(obj, path):
     logger.debug(f"Saved output to {path}.")
 
 
-# Might not be needed if using MLFlow
-class Results:
-    def __init__(self, model, time, root_dir="~/geomag-forecasting"):
-        self.model = model
-        self.time = time
-        self.root_dir = root_dir
+# # Might not be needed if using MLFlow
+# class Results:
+#     def __init__(self, model, time, root_dir="~/geomag-forecasting"):
+#         self.model = model
+#         self.time = time
+#         self.root_dir = root_dir
 
-    def get_multirun_dir(self):
+#     def get_multirun_dir(self):
 
-        time = pd.to_datetime(self.time)
-        time_dir = time.strftime("%Y-%m-%d_%H-%M")
-        dir_name = f"{self.root_dir}/multirun/{self.model}/{time_dir}"
-        dir_path = Path(dir_name).expanduser()
+#         time = pd.to_datetime(self.time)
+#         time_dir = time.strftime("%Y-%m-%d_%H-%M")
+#         dir_name = f"{self.root_dir}/multirun/{self.model}/{time_dir}"
+#         dir_path = Path(dir_name).expanduser()
 
-        return dir_path
+#         return dir_path
 
-    def get_multirun_results(self):
+#     def get_multirun_results(self):
 
-        results_dir = self.get_multirun_dir()
-        results = OmegaConf.load(f"{results_dir}/optimization_results.yaml")
+#         results_dir = self.get_multirun_dir()
+#         results = OmegaConf.load(f"{results_dir}/optimization_results.yaml")
 
-        return results
+#         return results
 
-    def get_best_dir(self):
+#     def get_best_dir(self):
 
-        results_dir = self.get_multirun_dir()
-        results = self.get_multirun_results()
+#         results_dir = self.get_multirun_dir()
+#         results = self.get_multirun_results()
 
-        best_params = results.best_evaluated_params
-        best_params_list = [f"{key}={val}" for key, val in best_params.items()]
+#         best_params = results.best_evaluated_params
+#         best_params_list = [f"{key}={val}" for key, val in best_params.items()]
 
-        dir_iter = results_dir.iterdir()
+#         dir_iter = results_dir.iterdir()
 
-        def _best_dir(dir_path):
-            overrides_path = dir_path / ".hydra/overrides.yaml"
+#         def _best_dir(dir_path):
+#             overrides_path = dir_path / ".hydra/overrides.yaml"
 
-            best = False
-            if overrides_path.exists():
-                overrides = OmegaConf.load(dir_path / overrides_path)
-                best = set(overrides) == set(best_params_list)
+#             best = False
+#             if overrides_path.exists():
+#                 overrides = OmegaConf.load(dir_path / overrides_path)
+#                 best = set(overrides) == set(best_params_list)
 
-            return best
+#             return best
 
-        best_dir = next(path for path in dir_iter if _best_dir(path))
-        return best_dir
+#         best_dir = next(path for path in dir_iter if _best_dir(path))
+#         return best_dir
 
-    def load_best_pred(self):
+#     def load_best_pred(self):
 
-        best_dir = self.get_best_dir()
-        ypred_path = best_dir / "ypred.pkl"
+#         best_dir = self.get_best_dir()
+#         ypred_path = best_dir / "ypred.pkl"
 
-        ypred = pd.read_pickle(ypred_path)
-        return ypred
+#         ypred = pd.read_pickle(ypred_path)
+#         return ypred
