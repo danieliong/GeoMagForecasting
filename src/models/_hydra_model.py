@@ -3,10 +3,14 @@
 import os
 import logging
 import mlflow
+import pandas as pd
+import numpy as np
 
 from abc import ABC, abstractmethod
 from omegaconf import OmegaConf
 from src.utils import save_output
+from src.plot import plot_prediction
+from src.storm_utils import has_storm_index
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +57,11 @@ class HydraModel(ABC):
         self.conda_env = None
         self.mlflow_kwargs = {}
         if self.mlflow:
-            self._setup_mlflow()
+            import mlflow
+
+            run = mlflow.active_run()
+            if run is not None:
+                self._setup_mlflow()
 
     @property
     def cv_metric(self):
@@ -106,3 +114,93 @@ class HydraModel(ABC):
         pass
 
     # TODO: Implement general CV
+
+    # @abstractmethod
+    def _plot(self, X, y, **kwargs):
+        # Return fig and ax you want to plot predictions on
+        # Should only plot for one storm
+        return None, None
+
+    def plot(
+        self,
+        X,
+        y,
+        pdf_path="prediction_plots.pdf",
+        persistence=False,
+        lead=None,
+        unit="minutes",
+        **kwargs,
+    ):
+        import matplotlib.pyplot as plt
+
+        plot_in_pdf = not self.mlflow and pdf_path is not None
+        if plot_in_pdf:
+            from matplotlib.backends.backend_pdf import PdfPages
+
+            pdf = PdfPages(pdf_path)
+
+        # Use last metric if there are more than one
+        if isinstance(self.metrics, (list, tuple)):
+            if len(self.metrics) > 1:
+                metric = self.metrics[-1]
+            else:
+                metric = self.metrics[0]
+        else:
+            metric = self.metrics
+
+        y = y.squeeze()
+        ypred = self.predict(X).squeeze()
+
+        if isinstance(ypred, np.ndarray):
+            ypred = pd.Series(ypred, index=y.index, name=y.name)
+
+        if has_storm_index(y):
+            fig = []
+            ax = []
+            for storm in y.storms.level:
+                fig_storm, ax_storm = self._plot(
+                    X.storms.get(storm), y.storms.get(storm), **kwargs
+                )
+                fig_storm_, ax_storm_ = plot_prediction(
+                    y,
+                    ypred,
+                    metric=metric,
+                    storm=storm,
+                    persistence=persistence,
+                    lead=lead,
+                    unit=unit,
+                    ax=ax_storm,
+                )
+
+                if fig_storm is None:
+                    fig_storm = fig_storm_
+                    ax_storm = ax_storm_
+
+                fig.append(fig_storm)
+                ax.append(ax_storm)
+
+                if self.mlflow:
+                    mlflow.log_figure(fig_storm, f"prediction_plots/storm_{storm}.png")
+                elif plot_in_pdf:
+                    pdf.savefig(fig_storm)
+        else:
+            fig, ax = self._plot(X, y, **kwargs)
+            _ = plot_prediction(
+                y,
+                ypred,
+                metric=metric,
+                persistence=persistence,
+                lead=lead,
+                unit=unit,
+                ax=ax,
+            )
+
+            if self.mlflow:
+                mlflow.log_figure(fig, "prediction_plot.png")
+            elif plot_in_pdf:
+                pdf.savefig(fig)
+
+        if plot_in_pdf:
+            pdf.close()
+
+        return fig, ax

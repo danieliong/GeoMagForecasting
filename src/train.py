@@ -27,11 +27,11 @@ from src._train import (
     convert_pred_to_pd,
     inv_transform_targets,
     compute_metrics,
-    plot_predictions,
     # compute_lagged_features,
     # parse_overrides,
 )
 from src.compute_lagged_features import compute_lagged_features
+from src.plot import plot_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +59,10 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
 
         experiment_id = experiment.experiment_id
 
-    orig_cwd = get_original_cwd()
-    tracking_uri = f"file://{orig_cwd}/mlruns"
-    mlflow.set_tracking_uri(tracking_uri)
-    logger.debug(f"MLFlow Tracking URI: {tracking_uri}")
+    # orig_cwd = get_original_cwd()
+    # tracking_uri = f"file://{orig_cwd}/mlruns"
+    # mlflow.set_tracking_uri(tracking_uri)
+    # logger.debug(f"MLFlow Tracking URI: {tracking_uri}")
 
     # if cfg.model == "xgboost":
     #     import mlflow.xgboost
@@ -71,6 +71,9 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
     #     mlflow.xgboost.autolog()
 
     run = mlflow.start_run(experiment_id=experiment_id)
+
+    tracking_uri = mlflow.get_tracking_uri()
+    logger.info(f"MLFlow Tracking URI: {tracking_uri}")
 
     processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
     if processed_data_dir is not None:
@@ -97,6 +100,9 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
         }
     )
     mlflow.log_params(cfg.cv.params)
+
+    if bool(cfg.tags):
+        mlflow.set_tags(cfg.tags)
 
     return run
 
@@ -226,14 +232,21 @@ def train(cfg):
         mlflow.log_artifact(pred_path)
 
     # Plot predictions
-    plot_predictions(
+    model.plot(
+        X_test,
         y_test,
-        ypred,
-        metrics=metrics,
-        use_mlflow=use_mlflow,
-        persistence=cfg.plot.persistence,
         lead=features_cfg.lead,
+        unit=features_cfg.lag_processor.unit,
+        **cfg.plot,
     )
+    # plot_predictions(
+    #     y_test,
+    #     ypred,
+    #     metrics=metrics,
+    #     use_mlflow=use_mlflow,
+    #     persistence=cfg.plot.persistence,
+    #     lead=features_cfg.lead,
+    # )
 
     ###########################################################################
     # Compute and log test metrics

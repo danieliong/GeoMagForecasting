@@ -7,9 +7,9 @@ param:
   max_interaction_bins: 32
   binning: "quantile"
   mains: "all"
-  interactions: 10
+  interactions: 100
   outer_bags: 8
-  inner_bags: 0
+  inner_bags: 5
   learning_rate: 0.01
   validation_size: 0.15
   early_stopping_rounds: 50
@@ -20,7 +20,8 @@ param:
   n_jobs: -2
   random_state: 8686
   
-mlflow: false
+mlflow: true
+
 
 outputs:
   model: "model.joblib"
