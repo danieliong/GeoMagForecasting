@@ -149,8 +149,8 @@ class StormAccessor:
     def resample(self, *args, **kwargs):
         return self.groupby().resample(*args, **kwargs)
 
-    def apply(self, **kwargs):
-        return self.groupby().apply(**kwargs)
+    def apply(self, *args, **kwargs):
+        return self.groupby().apply(*args, **kwargs)
 
     def has_same_storms(self, *obj):
         for x in obj:
