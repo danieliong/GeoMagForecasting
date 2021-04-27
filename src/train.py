@@ -112,21 +112,23 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
 def train(cfg):
     from src.storm_utils import StormIndexAccessor, StormAccessor
 
-    # Get data configs/overrides
-    data_overrides = utils.parse_data_overrides(cfg)
-    data_cfg = compose(
-        config_name="process_data", return_hydra_config=True, overrides=data_overrides,
-    )
+    # # Get data configs/overrides
+    # data_overrides = utils.parse_data_overrides(cfg)
+    # data_cfg = compose(
+    #     config_name="process_data", return_hydra_config=True, overrides=data_overrides,
+    # )
 
-    # Get features configs/overrides
-    features_overrides = utils.parse_processed_data_overrides(cfg)
-    features_overrides.extend(utils.parse_override(cfg.lagged_features))
-    features_cfg = compose(
-        config_name="compute_lagged_features",
-        return_hydra_config=True,
-        overrides=features_overrides,
-    )
+    # # Get features configs/overrides
+    # features_overrides = utils.parse_processed_data_overrides(cfg)
+    # features_overrides.extend(utils.parse_override(cfg.lagged_features))
+    # features_cfg = compose(
+    #     config_name="compute_lagged_features",
+    #     return_hydra_config=True,
+    #     overrides=features_overrides,
+    # )
 
+    data_cfg = utils.get_data_cfg(cfg)
+    features_cfg = utils.get_features_cfg(cfg)
     processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
     inputs_dir = Path(to_absolute_path(features_cfg.hydra.run.dir))
     paths = features_cfg.outputs

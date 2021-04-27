@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 
 # from loguru import logger
+from hydra.experimental import compose
 from hydra.utils import to_absolute_path, get_original_cwd
 from omegaconf import OmegaConf
 from pandas.tseries.frequencies import to_offset
@@ -140,6 +141,30 @@ def parse_processed_data_overrides(cfg):
         overrides.extend(parse_override(cfg[node], node_name=f"+{node}"))
 
     return overrides
+
+
+def get_data_cfg(cfg):
+
+    # Get data configs/overrides
+    data_overrides = parse_data_overrides(cfg)
+    data_cfg = compose(
+        config_name="process_data", return_hydra_config=True, overrides=data_overrides,
+    )
+
+    return data_cfg
+
+
+def get_features_cfg(cfg):
+    # Get features configs/overrides
+    features_overrides = parse_processed_data_overrides(cfg)
+    features_overrides.extend(parse_override(cfg.lagged_features))
+    features_cfg = compose(
+        config_name="compute_lagged_features",
+        return_hydra_config=True,
+        overrides=features_overrides,
+    )
+
+    return features_cfg
 
 
 def save_output(obj, path):
