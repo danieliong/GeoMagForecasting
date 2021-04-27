@@ -13,7 +13,7 @@ from src import utils
 from src.preprocessing.load import load_processed_data, load_processor
 
 from src.models import get_model
-from src._train import get_cv_split
+from src._train import get_cv_split, setup_mlflow
 from src.compute_lagged_features import compute_lagged_features
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,12 @@ def tune_hyperparams(cfg):
     inputs_dir = Path(to_absolute_path(features_cfg.hydra.run.dir))
     paths = features_cfg.outputs
 
-    # load_kwargs = OmegaConf.select(cfg, "load")
+    use_mlflow = OmegaConf.select(cfg, "mlflow", default=False)
+    if use_mlflow:
+        import mlflow
+
+        run = setup_mlflow(cfg, features_cfg=features_cfg, data_cfg=data_cfg)
+
     cv_method = cfg.cv.method
     cv_init_params = cfg.cv.params
 
@@ -36,24 +41,6 @@ def tune_hyperparams(cfg):
     model_name = cfg.model
     metrics = cfg.metrics
     # seed = cfg.seed
-
-    overrides = utils.parse_processed_data_overrides(cfg)
-
-    # features_cfg = compose(
-    #     config_name="compute_lagged_features",
-    #     return_hydra_config=True,
-    #     overrides=overrides,
-    # )
-    # lag = OmegaConf.select(features_cfg, "lag", default=60)
-    # exog_lag = OmegaConf.select(features_cfg, "exog_lag", default=60)
-    # lead = OmegaConf.select(features_cfg, "lead", default=60)
-    # inputs_dir = Path(to_absolute_path(features_cfg.hydra.run.dir))
-    # paths = features_cfg.outputs
-
-    # # TODO: Modify code after removing features configs
-    # if any(not (inputs_dir / path).exists() for path in paths.values()):
-    #     # if not inputs_dir.exists():
-    #     compute_lagged_features(lag, exog_lag, lead, inputs_dir)
 
     # Compute lagged features if they haven't been computed yet
     if any(not (inputs_dir / path).exists() for path in paths.values()):
@@ -72,13 +59,20 @@ def tune_hyperparams(cfg):
     logger.info(f"Getting CV split for '{cv_method}' method...")
     cv = get_cv_split(y_train, cv_method, **cv_init_params)
 
-    model = get_model(model_name)(cfg, cv=cv, metrics=metrics, mlflow=False)
+    model = get_model(model_name)(cfg, cv=cv, metrics=metrics, mlflow=use_mlflow)
 
     cv_score = model.cv_score(X_train, y_train)
     logger.info(f"CV score: {cv_score}")
+    if use_mlflow:
+        mlflow.log_metric(model.cv_metric, cv_score)
+
+    mlflow.log_params(model.params)
 
     model.save_output()
     # utils.save_output(model, cfg.outputs.hydra_model)
+
+    if use_mlflow:
+        mlflow.end_run()
 
     return cv_score
 
