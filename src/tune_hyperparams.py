@@ -13,7 +13,8 @@ from src import utils
 from src.preprocessing.load import load_processed_data, load_processor
 
 from src.models import get_model
-from src._train import compute_lagged_features, get_cv_split
+from src._train import get_cv_split
+from src.compute_lagged_features import compute_lagged_features
 
 logger = logging.getLogger(__name__)
 
