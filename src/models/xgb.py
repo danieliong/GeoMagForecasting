@@ -44,7 +44,7 @@ class HydraXGB(HydraModel):
     def _setup_mlflow(self):
         import mlflow.xgboost
 
-        logger.debug("Turning on MLFlow autlogging for XGBoost...")
+        logger.info("Turning on MLFlow autlogging for XGBoost...")
         mlflow.xgboost.autolog()
 
     def cross_validate(self, dtrain):
@@ -68,7 +68,7 @@ class HydraXGB(HydraModel):
 
         return cv_res
 
-    def _get_optimal_num_trees(self):
+    def get_optimal_num_trees(self):
         assert hasattr(self, "cv_res_")
         return np.argmin(self.cv_res_[f"test-{self.cv_metric}-mean"]) + 1
 
@@ -80,15 +80,15 @@ class HydraXGB(HydraModel):
 
         dtrain = xgb.DMatrix(X, label=y, feature_names=self.feature_names_)
 
-        if self.cv is not None and not hasattr(self, "cv_res_"):
-            self.cv_res_ = self.cross_validate(dtrain)
+        # if self.cv is not None and not hasattr(self, "cv_res_"):
+        #     self.cv_res_ = self.cross_validate(dtrain)
 
         kwargs = self.kwargs.copy()
-        num_boost_round = kwargs.pop("num_boost_round")
+        num_boost_round = int(kwargs.pop("num_boost_round"))
         _ = kwargs.pop("early_stopping_rounds")
 
-        if hasattr(self, "cv_res_"):
-            num_boost_round = self._get_optimal_num_trees()
+        # if hasattr(self, "cv_res_"):
+        #     num_boost_round = self.get_optimal_num_trees()
 
         # if self.cv is not None:
         #     if not hasattr(self, "cv_res_"):
@@ -113,6 +113,13 @@ class HydraXGB(HydraModel):
             dtrain = xgb.DMatrix(X, label=y)
             self.cv_res_ = self.cross_validate(dtrain)
 
+        # Log params when tuning hyperparams b/c autolog only logs these when
+        # using train
+        if self.mlflow:
+            mlflow.log_params(self.params)
+            opt_num_trees = self.get_optimal_num_trees()
+            mlflow.log_param("num_boost_round", opt_num_trees)
+
         return float(min(self.cv_res_[f"test-{self.cv_metric}-mean"]))
 
     def predict(self, X):
@@ -128,16 +135,17 @@ class HydraXGB(HydraModel):
         if self.model is not None:
             self.model.save_model(self.outputs["model"])
 
-        if "cv_table" in self.outputs.keys():
-            if self.outputs["cv_table"] is not None:
-                cv_tbl = pd.DataFrame(self.cv_res_)
-                cv_tbl.to_csv(self.outputs["cv_table"])
+        if hasattr(self, "cv_res_"):
+            if "cv_table" in self.outputs.keys():
+                if self.outputs["cv_table"] is not None:
+                    cv_tbl = pd.DataFrame(self.cv_res_)
+                    cv_tbl.to_csv(self.outputs["cv_table"])
 
-                if self.mlflow:
-                    mlflow.log_artifact(self.outputs["cv_table"])
+                    if self.mlflow:
+                        mlflow.log_artifact(self.outputs["cv_table"])
 
-        if "cv_results" in self.outputs.keys():
-            cv_res = OmegaConf.create(
-                {"num_boost_rounds": int(self._get_optimal_num_trees())}
-            )
-            OmegaConf.save(cv_res, self.outputs["cv_results"])
+            if "cv_results" in self.outputs.keys():
+                cv_res = OmegaConf.create(
+                    {"num_boost_rounds": int(self.get_optimal_num_trees())}
+                )
+                OmegaConf.save(cv_res, self.outputs["cv_results"])

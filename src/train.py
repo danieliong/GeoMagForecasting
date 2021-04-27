@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import logging
 import yaml
+import mlflow
 import matplotlib.pyplot as plt
 
 from hydra.utils import to_absolute_path, get_original_cwd
@@ -27,6 +28,7 @@ from src._train import (
     convert_pred_to_pd,
     inv_transform_targets,
     compute_metrics,
+    setup_mlflow,
     # compute_lagged_features,
     # parse_overrides,
 )
@@ -35,76 +37,48 @@ from src.plot import plot_predictions
 
 logger = logging.getLogger(__name__)
 
-DATA_CONFIGS_TO_LOG = {
-    "start": "start",
-    "end": "end",
-    "target": "target.name",
-    "features_source": "features.name",
-    "features": "features.load.features",
-    "target_processing": "target.pipeline.order",
-    "features_processing": "features.pipeline.order",
-}
 
+def update_tuned_hyperparams(cfg, features_cfg):
 
-def setup_mlflow(cfg, features_cfg, data_cfg):
-    import mlflow
+    tune_cfg = OmegaConf.select(cfg, "tune", default=None)
+    if tune_cfg is not None:
+        exp_name = OmegaConf.select(tune_cfg, "experiment_name", default=None)
+        exp_id = OmegaConf.select(tune_cfg, "experiment_id", default=None)
+        params = OmegaConf.select(tune_cfg, "params", default=None)
+        kwargs = OmegaConf.select(tune_cfg, "kwargs", default=None)
+        metric = OmegaConf.select(tune_cfg, "metric", default="rmse")
 
-    experiment_id = OmegaConf.select(cfg, "experiment_id")
+        if exp_name is not None:
+            exp_id = mlflow.get_experiment_by_name(exp_name).experiment_id
 
-    if experiment_id is None and cfg.experiment_name is not None:
-        mlflow.set_experiment(cfg.experiment_name)
-        experiment = mlflow.get_experiment_by_name(cfg.experiment_name)
-        if cfg.experiment_name is not None:
-            logger.debug(f"MLFlow Experiment: {cfg.experiment_name}")
+        if exp_id is not None:
+            best_run = mlflow.search_runs(
+                exp_id, order_by=[f"metric.{metric}"], max_results=1
+            )
+            best_params = best_run.filter(regex="^params.")
+            best_params.rename(columns=lambda x: x.replace("params.", ""), inplace=True)
 
-        experiment_id = experiment.experiment_id
+            # Update hyperparams
+            if params is not None:
+                best_hyperparams = best_params[params].iloc[0].to_dict()
+                OmegaConf.update(cfg, "param", best_hyperparams, merge=True)
+                hyperparams_str = ", ".join(
+                    ["=".join(x) for x in best_hyperparams.items()]
+                )
+                logger.info(f"Updated hyperparameters: {hyperparams_str}")
 
-    # orig_cwd = get_original_cwd()
-    # tracking_uri = f"file://{orig_cwd}/mlruns"
-    # mlflow.set_tracking_uri(tracking_uri)
-    # logger.debug(f"MLFlow Tracking URI: {tracking_uri}")
+            # Update kwargs
+            if kwargs is not None:
+                best_kwargs = best_params[kwargs].iloc[0].to_dict()
+                OmegaConf.update(cfg, "kwargs", best_kwargs, merge=True)
+                kwargs_str = ", ".join(["=".join(x) for x in best_kwargs.items()])
+                logger.info(f"Updated kwargs: {kwargs_str}")
 
-    # if cfg.model == "xgboost":
-    #     import mlflow.xgboost
-
-    #     logger.debug("Turning on MLFlow autologging for XGBoost...")
-    #     mlflow.xgboost.autolog()
-
-    run = mlflow.start_run(experiment_id=experiment_id)
-
-    tracking_uri = mlflow.get_tracking_uri()
-    logger.info(f"MLFlow Tracking URI: {tracking_uri}")
-
-    processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
-    if processed_data_dir is not None:
-        data_hydra_dir = processed_data_dir / ".hydra"
-        mlflow.log_artifacts(data_hydra_dir, artifact_path="processed_data_configs")
-        data_cfg = OmegaConf.load(data_hydra_dir / "config.yaml")
-        for name, param_name in DATA_CONFIGS_TO_LOG.items():
-            param = OmegaConf.select(data_cfg, param_name)
-            if param is not None:
-                if isinstance(param, list):
-                    param = ", ".join(param)
-                mlflow.log_param(name, param)
-
-    model_hydra_dir = Path(".hydra")
-    mlflow.log_artifacts(model_hydra_dir, artifact_path="model_configs")
-
-    mlflow.log_params(
-        {
-            "model": cfg.model,
-            "lag": features_cfg.lag,
-            "exog_lag": features_cfg.exog_lag,
-            "lead": features_cfg.lead,
-            "cv_method": cfg.cv.method,
-        }
-    )
-    mlflow.log_params(cfg.cv.params)
-
-    if bool(cfg.tags):
-        mlflow.set_tags(cfg.tags)
-
-    return run
+            if tune_cfg.lags:
+                OmegaConf.update(features_cfg, "lag", int(best_params["lag"]))
+                OmegaConf.update(features_cfg, "exog_lag", int(best_params["exog_lag"]))
+                logger.info(f"Updated lag: {best_params['lag']}")
+                logger.info(f"Updated exog_lag: {best_params['exog_lag']}")
 
 
 # NOTE: Make this return RMSE to use Nevergrad
@@ -127,6 +101,12 @@ def train(cfg):
     #     overrides=features_overrides,
     # )
 
+    # Model specific parameters
+    model_name = cfg.model
+    metrics = cfg.metrics
+    pred_path = OmegaConf.select(cfg.outputs, "predictions", default="ypred.pkl")
+    # seed = cfg.seed
+
     data_cfg = utils.get_data_cfg(cfg)
     features_cfg = utils.get_features_cfg(cfg)
     processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
@@ -139,6 +119,8 @@ def train(cfg):
         import mlflow
 
         run = setup_mlflow(cfg, features_cfg=features_cfg, data_cfg=data_cfg)
+
+    update_tuned_hyperparams(cfg, features_cfg)
 
     # Compute lagged features if they haven't been computed yet
     if any(not (inputs_dir / path).exists() for path in paths.values()):
@@ -161,12 +143,6 @@ def train(cfg):
     # lag = cfg.lag
     # exog_lag = cfg.exog_lag
     # lead = cfg.lead
-
-    # Model specific parameters
-    model_name = cfg.model
-    metrics = cfg.metrics
-    pred_path = OmegaConf.select(cfg.outputs, "predictions", default="ypred.pkl")
-    # seed = cfg.seed
 
     logger.info("Loading training data and computing lagged features...")
 

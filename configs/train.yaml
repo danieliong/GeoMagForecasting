@@ -3,7 +3,7 @@
 defaults:
   - hydra/sweeper: nevergrad
   # - hydra/launcher: submitit_slurm
-  - sweeper: default
+  # - sweeper: default
   - model: xgboost
   - cv: storms
 
@@ -24,22 +24,6 @@ experiment_name: test
 run_name: null
 tags:
   test: true
-
-# lag: 60
-# exog_lag: 60
-# lead: 60
-
-# processed_data_dir: outputs/processed_data/${features}_${target}_${split}/${data_overrides}
-
-# load:
-#   # Keyword arguments for load_processed_data, load_processors in utils
-#   inputs_dir: outputs/lagged_features/${features}_${target}_${split}/${data_overrides}/${lag}_${exog_lag}_${lead}/${features_overrides}
-#   paths:
-#     X_train: X_train.npy
-#     y_train: y_train.pkl
-#     X_test: X_test.npy
-#     y_test: y_test.pkl
-#     feature_names: features_names.pkl
 
 # Inverse transform before computing metrics
 inverse_transform: true

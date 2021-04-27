@@ -21,6 +21,16 @@ from src.storm_utils import has_storm_index, StormIndexAccessor, StormAccessor
 
 logger = logging.getLogger(__name__)
 
+DATA_CONFIGS_TO_LOG = {
+    "start": "start",
+    "end": "end",
+    "target": "target.name",
+    "features_source": "features.name",
+    "features": "features.load.features",
+    "target_processing": "target.pipeline.order",
+    "features_processing": "features.pipeline.order",
+}
+
 
 def get_cv_split(y, method, **init_params):
 
@@ -293,3 +303,65 @@ def predict_persistence(y, lead, unit="minutes"):
         )
     else:
         return y.shift(periods=1, freq=lead)
+
+
+def setup_mlflow(cfg, features_cfg, data_cfg):
+    import mlflow
+
+    experiment_id = OmegaConf.select(cfg, "experiment_id")
+
+    if experiment_id is None and cfg.experiment_name is not None:
+        mlflow.set_experiment(cfg.experiment_name)
+        experiment = mlflow.get_experiment_by_name(cfg.experiment_name)
+        if cfg.experiment_name is not None:
+            logger.debug(f"MLFlow Experiment: {cfg.experiment_name}")
+
+        experiment_id = experiment.experiment_id
+
+    # orig_cwd = get_original_cwd()
+    # tracking_uri = f"file://{orig_cwd}/mlruns"
+    # mlflow.set_tracking_uri(tracking_uri)
+    # logger.debug(f"MLFlow Tracking URI: {tracking_uri}")
+
+    # if cfg.model == "xgboost":
+    #     import mlflow.xgboost
+
+    #     logger.debug("Turning on MLFlow autologging for XGBoost...")
+    #     mlflow.xgboost.autolog()
+
+    run = mlflow.start_run(experiment_id=experiment_id)
+
+    tracking_uri = mlflow.get_tracking_uri()
+    logger.info(f"MLFlow Tracking URI: {tracking_uri}")
+
+    processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
+    if processed_data_dir is not None:
+        data_hydra_dir = processed_data_dir / ".hydra"
+        mlflow.log_artifacts(data_hydra_dir, artifact_path="processed_data_configs")
+        data_cfg = OmegaConf.load(data_hydra_dir / "config.yaml")
+        for name, param_name in DATA_CONFIGS_TO_LOG.items():
+            param = OmegaConf.select(data_cfg, param_name)
+            if param is not None:
+                if isinstance(param, list):
+                    param = ", ".join(param)
+                mlflow.log_param(name, param)
+
+    model_hydra_dir = Path(".hydra")
+    mlflow.log_artifacts(model_hydra_dir, artifact_path="model_configs")
+
+    mlflow.log_params(
+        {
+            "model": cfg.model,
+            "lag": features_cfg.lag,
+            "exog_lag": features_cfg.exog_lag,
+            "lead": features_cfg.lead,
+            "cv_method": cfg.cv.method,
+        }
+    )
+    mlflow.log_params(cfg.cv.params)
+
+    tags = OmegaConf.select(cfg, "tags", default={})
+    if bool(tags):
+        mlflow.set_tags(tags)
+
+    return run

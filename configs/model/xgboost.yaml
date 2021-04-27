@@ -34,6 +34,20 @@ hydra:
         lower: 0.5
         upper: 1.0
 
+
+tune:
+  experiment_name: null
+  experiment_id: null
+  lags: false
+  metric: "rmse"
+  params:
+    - learning_rate
+    - max_depth
+    - min_child_weight
+    - colsample_bytree
+  kwargs:
+    - num_boost_round
+        
 param:
   learning_rate: 0.2
   max_depth: 6
