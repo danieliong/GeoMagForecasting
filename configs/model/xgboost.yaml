@@ -40,6 +40,8 @@ tune:
   experiment_id: null
   lags: false
   metric: "rmse"
+  # filter_string: "params.features=\"['bx', 'by', 'bz']\""
+  filter_string: ""
   params:
     - learning_rate
     - max_depth
@@ -57,7 +59,7 @@ param:
 mlflow: true
   
 kwargs:
-  num_boost_round: 30
+  num_boost_round: 500
   early_stopping_rounds: 10
 
 outputs:

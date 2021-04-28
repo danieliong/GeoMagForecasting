@@ -5,15 +5,25 @@ defaults:
   - model: xgboost
   - cv: storms
   - sweeper: default
+  - lagged_features: default
+  # - sweeper: tune_lags
 
 features:
   name: ace
+  load:
+    features:
+      - bx
+      - by
+      - bz
 target:
   name: symh
 split:
   method: storms
 data: {}
-lagged_features: {}
+# lagged_features:
+#   lag: 60
+#   exog_lag: 60
+#   lead: 60
     
 seed: 8686
 metrics: "rmse"
@@ -21,6 +31,9 @@ metrics: "rmse"
 # mlflow
 mlflow: true
 experiment_name: test_tune
+experiment_id: null
+tags:
+  tune: true
 
 hydra:
   verbose: false

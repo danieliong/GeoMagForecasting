@@ -3,13 +3,13 @@
 hydra:
   sweeper:
     parametrization:
-      lag:
+      lagged_features.lag:
         integer: true
         step: 20
         lower: 40
-        upper: 180
-      exog_lag:
+        upper: 240
+      lagged_features.exog_lag:
         integer: true
         step: 20
         lower: 60
-        upper: 180
+        upper: 240

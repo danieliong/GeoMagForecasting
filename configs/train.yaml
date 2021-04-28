@@ -6,22 +6,28 @@ defaults:
   # - sweeper: default
   - model: xgboost
   - cv: storms
+  - lagged_features: default
 
 data: {}
 features:
   name: ace
+  load:
+    features:
+      - bx
+      - by
+      - bz
 target:
   name: symh
 split:
   method: ${cv.method}
-lagged_features: {}
 
 seed: 8686
 metrics: "rmse"
 
 # mlflow
 experiment_name: test
-run_name: null
+experiment_id: null
+# run_name: null
 tags:
   test: true
 
