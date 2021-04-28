@@ -89,7 +89,6 @@ class EBMWrapper(mlflow.pyfunc.PythonModel):
 class HydraEBM(HydraModel):
     def __init__(self, cfg, **kwargs):
         super().__init__(cfg, **kwargs)
-        self._setup_mlflow()
         self.model = ExplainableBoostingRegressor(**self.params)
         self.python_model = EBMWrapper()
         self._fitted = False

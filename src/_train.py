@@ -5,7 +5,7 @@ import numpy as np
 import logging
 import matplotlib.pyplot as plt
 
-from hydra.utils import to_absolute_path
+from hydra.utils import to_absolute_path, get_original_cwd
 from omegaconf import OmegaConf
 from pathlib import Path
 from sklearn.model_selection import TimeSeriesSplit, GroupKFold
@@ -29,6 +29,7 @@ DATA_CONFIGS_TO_LOG = {
     "features": "features.load.features",
     "target_processing": "target.pipeline.order",
     "features_processing": "features.pipeline.order",
+    "test_storms": "split.test_storms",
 }
 
 
@@ -308,7 +309,7 @@ def predict_persistence(y, lead, unit="minutes"):
 def setup_mlflow(cfg, features_cfg, data_cfg):
     import mlflow
 
-    experiment_id = OmegaConf.select(cfg, "experiment_id")
+    experiment_id = OmegaConf.select(cfg, "experiment_id", default=None)
 
     if experiment_id is None and cfg.experiment_name is not None:
         mlflow.set_experiment(cfg.experiment_name)

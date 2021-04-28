@@ -47,13 +47,17 @@ def update_tuned_hyperparams(cfg, features_cfg):
         params = OmegaConf.select(tune_cfg, "params", default=None)
         kwargs = OmegaConf.select(tune_cfg, "kwargs", default=None)
         metric = OmegaConf.select(tune_cfg, "metric", default="rmse")
+        filter_string = OmegaConf.select(tune_cfg, "filter_string", default="")
 
-        if exp_name is not None:
+        if exp_id is None and exp_name is not None:
             exp_id = mlflow.get_experiment_by_name(exp_name).experiment_id
 
         if exp_id is not None:
             best_run = mlflow.search_runs(
-                exp_id, order_by=[f"metric.{metric}"], max_results=1
+                str(exp_id),
+                order_by=[f"metric.{metric}"],
+                max_results=1,
+                filter_string=filter_string,
             )
             best_params = best_run.filter(regex="^params.")
             best_params.rename(columns=lambda x: x.replace("params.", ""), inplace=True)
