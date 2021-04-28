@@ -318,10 +318,10 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
 
         experiment_id = experiment.experiment_id
 
-    # orig_cwd = get_original_cwd()
-    # tracking_uri = f"file://{orig_cwd}/mlruns"
-    # mlflow.set_tracking_uri(tracking_uri)
-    # logger.debug(f"MLFlow Tracking URI: {tracking_uri}")
+    orig_cwd = get_original_cwd()
+    tracking_uri = f"file://{orig_cwd}/mlruns"
+    mlflow.set_tracking_uri(tracking_uri)
+    logger.info(f"MLFlow Tracking URI: {tracking_uri}")
 
     # if cfg.model == "xgboost":
     #     import mlflow.xgboost
@@ -331,8 +331,8 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
 
     run = mlflow.start_run(experiment_id=experiment_id)
 
-    tracking_uri = mlflow.get_tracking_uri()
-    logger.info(f"MLFlow Tracking URI: {tracking_uri}")
+    # tracking_uri = mlflow.get_tracking_uri()
+    # logger.info(f"MLFlow Tracking URI: {tracking_uri}")
 
     processed_data_dir = Path(to_absolute_path(data_cfg.hydra.run.dir))
     if processed_data_dir is not None:

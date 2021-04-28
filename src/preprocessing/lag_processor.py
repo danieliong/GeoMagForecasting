@@ -217,7 +217,7 @@ class LaggedFeaturesProcessor:
             start="0 days", end=lag, freq=freq, closed="left"
         )
         # Minutes in reverse order
-        lags = (int(t.seconds / 60) for t in lags_timedelta)
+        lags = (int(t.total_seconds() / 60) for t in lags_timedelta)
 
         # Order: Iterate columns first
         # e.g. [density0, density5, ..., temperature0, temperature5, ....]

@@ -117,6 +117,10 @@ def load_features_ace(
         df = df.merge(positions, how="left", on=time_col)
         df[x_coord_col].fillna(method=fillna_method, inplace=True)
 
+        for col in dtypes.copy().keys():
+            if col not in df.columns:
+                _ = dtypes.pop(col)
+
     return df.astype(dtypes)
 
 
