@@ -84,6 +84,9 @@ def parse_override(node_cfg, node_name=None):
             else:
                 result = ""
 
+            if val is None:
+                val = "null"
+
             result += "=".join([str(key), str(val)])
 
         return result

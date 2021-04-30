@@ -110,13 +110,15 @@ def compute_lagged_features(cfg):
     # inputs_dir = cfg.inputs_dir
     # output_dir = Path(outputs.output_dir)
 
-    overrides = utils.parse_data_overrides(
-        cfg, override_nodes=["features", "target", "split"]
-    )
+    data_cfg = utils.get_data_cfg(cfg)
 
-    data_cfg = compose(
-        config_name="process_data", return_hydra_config=True, overrides=overrides
-    )
+    # overrides = utils.parse_data_overrides(
+    #     cfg, override_nodes=["features", "target", "split"]
+    # )
+
+    # data_cfg = compose(
+    #     config_name="process_data", return_hydra_config=True, overrides=overrides
+    # )
     inputs_dir = data_cfg.hydra.run.dir
     paths = data_cfg.output
 
