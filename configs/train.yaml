@@ -11,11 +11,11 @@ defaults:
 data: {}
 features:
   name: ace
-  load:
-    features:
-      - bx
-      - by
-      - bz
+  # load:
+  #   features:
+  #     - bx
+  #     - by
+  #     - bz
 target:
   name: symh
 split:

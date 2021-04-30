@@ -10,11 +10,11 @@ defaults:
 
 features:
   name: ace
-  load:
-    features:
-      - bx
-      - by
-      - bz
+  # load:
+  #   features:
+  #     - bx
+  #     - by
+  #     - bz
 target:
   name: symh
 split:
@@ -31,7 +31,7 @@ metrics: "rmse"
 # mlflow
 mlflow: true
 experiment_name: test_tune
-experiment_id: null
+experiment_id: '3'
 tags:
   tune: true
 
