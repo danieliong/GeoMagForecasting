@@ -347,7 +347,7 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
 
         # QUESTION: Should I interpolate, drop, or fill NAs in speed?
         if speed.isna().any():
-            speed = Interpolator().transform(x_coord)
+            speed = Interpolator().transform(speed)
 
         # Set propagated time as new time index
         X_[self.time_level] = self.compute_propagated_times(
