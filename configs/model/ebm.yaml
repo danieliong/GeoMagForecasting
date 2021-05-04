@@ -22,6 +22,13 @@ param:
   
 mlflow: true
 
+plot:
+  plot_features: null
+  score_threshold: 0.9
+  figsize: [ 14, 17 ]
+  linewidth: 0.7
+  gridspec_kw: {}
+  sharex: true
 
 outputs:
   model: "model.joblib"

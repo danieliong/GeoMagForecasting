@@ -159,7 +159,7 @@ class HydraModel(ABC):
             ax = []
             for storm in y.storms.level:
                 fig_storm, ax_storm = self._plot(
-                    X.storms.get(storm), y.storms.get(storm), **kwargs
+                    X.storms.get(storm), y.storms.get(storm), lead=lead, **kwargs
                 )
                 fig_storm_, ax_storm_ = plot_prediction(
                     y,
@@ -198,7 +198,7 @@ class HydraModel(ABC):
             if self.mlflow:
                 mlflow.log_figure(fig, "prediction_plot.png")
             elif plot_in_pdf:
-                pdf.savefig(fig)
+                pdf.savefig(fig, bbox_inches="tight")
 
         if plot_in_pdf:
             pdf.close()

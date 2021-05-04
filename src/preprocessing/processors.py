@@ -323,6 +323,7 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
         propagated_time = cls._make_time_nondecreasing(times + time_delay)
 
         return propagated_time.round(freq)
+        # QUESTION: What to do about duplicated times?
 
     def transform(self, X):
 
@@ -336,17 +337,19 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
                 return X
 
         X_ = X.copy()
-        x_coord = X_[self.x_coord_col]
-        speed = X_[self.speed_col]
+        x_coord = X_[self.x_coord_col].copy()
+        speed = X_[self.speed_col].copy()
         # times = X_.index.get_level_values(self.time_level)
 
         # NOTE: Couldn't use iterate_storms_method here because we want to
         # interpolate x_coord as a whole
         if x_coord.isna().any():
+            # Can be interpolated across storms
             x_coord = Interpolator(method="time").transform(x_coord)
 
         # QUESTION: Should I interpolate, drop, or fill NAs in speed?
         if speed.isna().any():
+            # Shouldn't be interpolated across storms
             speed = Interpolator().transform(speed)
 
         # Set propagated time as new time index

@@ -2,6 +2,7 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 from pandas.tseries.frequencies import to_offset
 from ._train import compute_metric, predict_persistence
@@ -11,6 +12,11 @@ FIGSIZE = (15, 10)
 
 
 def plot_prediction(y, ypred, metric, storm, persistence, lead, unit, ax=None):
+
+    # locator = mdates.AutoDateLocator(minticks=5)
+    # formatter = mdates.ConciseDateFormatter(locator)
+    # ax.xaxis.set_major_locator(locator)
+    # ax.xaxis.set_major_formatter(formatter)
 
     if storm is None:
         metric_val = compute_metric(y, ypred, metric, storm=None)
@@ -34,7 +40,7 @@ def plot_prediction(y, ypred, metric, storm, persistence, lead, unit, ax=None):
     if persistence:
         _ = _plot_persistence(y_, lead=lead, metric=metric, unit=unit, ax=ax)
 
-    ax.legend()
+    ax.legend(ncol=3, prop={"size": 7})
     if storm is not None:
         ax.set_title(f"Storm #{storm}")
     ax.set_xlabel("")

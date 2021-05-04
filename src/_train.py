@@ -17,6 +17,7 @@ from src import STORM_LEVEL
 from src import utils
 from src.preprocessing.load import load_processed_data, load_processor
 from src.storm_utils import has_storm_index, StormIndexAccessor, StormAccessor
+from src.utils import get_offset
 
 
 logger = logging.getLogger(__name__)
@@ -293,10 +294,7 @@ def compute_lagged_features(lag, exog_lag, lead, save_dir, overrides=None):
 
 def predict_persistence(y, lead, unit="minutes"):
 
-    if isinstance(lead, str):
-        lead = to_offset(lead)
-    elif isinstance(lead, int):
-        lead = to_offset(pd.Timedelta(**{unit: lead}))
+    lead = get_offset(lead, unit=unit)
 
     if has_storm_index(y):
         return y.storms.apply(

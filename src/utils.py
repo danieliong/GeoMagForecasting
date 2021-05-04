@@ -170,6 +170,32 @@ def get_features_cfg(cfg):
     return features_cfg
 
 
+def get_offset(x, unit="minutes"):
+    if isinstance(x, str):
+        return to_offset(x)
+    elif isinstance(x, int):
+        return to_offset(pd.Timedelta(**{unit: x}))
+
+    return x
+
+
+def infer_freq(x):
+
+    # Ad-hoc way to infer frequency when there is missing
+    if isinstance(x, (pd.DataFrame, pd.Series)):
+        idx = x.drop_duplicates().index
+    elif isinstance(x, pd.Index):
+        idx = x.drop_duplicates()
+
+    freq = pd.infer_freq(idx)
+    if freq is None:
+        diffs = idx[1:] - idx[:-1]
+        min_delta = diffs.min()
+        freq = to_offset(min_delta)
+
+    return freq
+
+
 def save_output(obj, path):
     """Save output object to path.
 
