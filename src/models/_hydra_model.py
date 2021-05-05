@@ -132,12 +132,15 @@ class HydraModel(ABC):
         **kwargs,
     ):
         import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_pdf import PdfPages
 
-        plot_in_pdf = not self.mlflow and pdf_path is not None
-        if plot_in_pdf:
-            from matplotlib.backends.backend_pdf import PdfPages
+        pdf = PdfPages(pdf_path)
 
-            pdf = PdfPages(pdf_path)
+        # plot_in_pdf = not self.mlflow and pdf_path is not None
+        # if plot_in_pdf:
+        #     from matplotlib.backends.backend_pdf import PdfPages
+
+        #     pdf = PdfPages(pdf_path)
 
         # Use last metric if there are more than one
         if isinstance(self.metrics, (list, tuple)):
@@ -178,11 +181,12 @@ class HydraModel(ABC):
 
                 fig.append(fig_storm)
                 ax.append(ax_storm)
+                pdf.savefig(fig_storm, bbox_inches="tight")
 
-                if self.mlflow:
-                    mlflow.log_figure(fig_storm, f"prediction_plots/storm_{storm}.png")
-                elif plot_in_pdf:
-                    pdf.savefig(fig_storm)
+                # if self.mlflow:
+                #     mlflow.log_figure(fig_storm, f"prediction_plots/storm_{storm}.png")
+                # elif plot_in_pdf:
+                #     pdf.savefig(fig_storm)
         else:
             fig, ax = self._plot(X, y, **kwargs)
             _ = plot_prediction(
@@ -195,12 +199,15 @@ class HydraModel(ABC):
                 ax=ax,
             )
 
-            if self.mlflow:
-                mlflow.log_figure(fig, "prediction_plot.png")
-            elif plot_in_pdf:
-                pdf.savefig(fig, bbox_inches="tight")
+            pdf.savefig(fig, bbox_inches="tight")
 
-        if plot_in_pdf:
-            pdf.close()
+            # if self.mlflow:
+            #     mlflow.log_figure(fig, "prediction_plot.png")
+            # elif plot_in_pdf:
+            #     pdf.savefig(fig, bbox_inches="tight")
+
+        pdf.close()
+        if self.mlflow:
+            mlflow.log_artifact(pdf_path)
 
         return fig, ax
