@@ -15,16 +15,18 @@ pipeline:
     - interpolate
     - scaler_func
   interpolate: false
-  resample_freq: '20T'
-  resample_func: "max"
-
+  resample:
+    freq: '20T'
+    func: "mean"
   # Name of sklearn transformer. Must be within scope in src/process_data.py
-  scaler: null
-
-  # If specified, scaler will be FunctionTransformer with arg func
-  func: null
-  inverse_func: null
-  # func: "np.log"
-  # inverse_func: "np.exp"
+  scaler: 
+    scaler: null
+    kwargs: null
+  func:
+    func: null
+    # func: "np.log"
+    inverse_func: null
+    # inverse_func: "np.exp"
+    kwargs: null
 
   # Other keyword arguments for scaler or func can also be passed
