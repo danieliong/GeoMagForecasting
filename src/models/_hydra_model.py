@@ -158,8 +158,10 @@ class HydraModel(ABC):
             ypred = pd.Series(ypred, index=y.index, name=y.name)
 
         if has_storm_index(y):
-            fig = []
-            ax = []
+            fig = dict()
+            ax = dict()
+            # fig = []
+            # ax = []
             for storm in y.storms.level:
                 fig_storm, ax_storm = self._plot(
                     X.storms.get(storm), y.storms.get(storm), lead=lead, **kwargs
@@ -179,8 +181,10 @@ class HydraModel(ABC):
                     fig_storm = fig_storm_
                     ax_storm = ax_storm_
 
-                fig.append(fig_storm)
-                ax.append(ax_storm)
+                fig[storm] = fig_storm
+                ax[storm] = ax_storm
+                # fig.append(fig_storm)
+                # ax.append(ax_storm)
                 pdf.savefig(fig_storm, bbox_inches="tight")
 
                 # if self.mlflow:

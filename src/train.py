@@ -214,13 +214,19 @@ def train(cfg):
         mlflow.log_artifact(pred_path)
 
     # Plot predictions
-    model.plot(
+    fig, ax = model.plot(
         X_test,
         y_test,
         lead=features_cfg.lead,
         unit=features_cfg.lag_processor.unit,
         **cfg.plot,
     )
+    if isinstance(fig, list):
+        for f in fig:
+            f.close()
+    else:
+        fig.close()
+
     # plot_predictions(
     #     y_test,
     #     ypred,

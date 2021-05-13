@@ -247,9 +247,9 @@ class HydraEBM(HydraModel):
             agg_scores[feature].plot(
                 ax=ax[1], label=feature, linewidth=linewidth, color=colors[i]
             )
-        ax[1].legend(ncol=7, prop={"size": 7})
-        perc_contrib = round(perc_scores[contrib_plot_features].sum(), 2)
-        y_label = f"Contributions ({perc_contrib*100}%)"
+        ax[1].legend(ncol=7, prop={"size": 8})
+        perc_contrib = round(perc_scores[contrib_plot_features].sum(), 3)
+        y_label = f"Contributions ({perc_contrib*100:.1f}%)"
         ax[1].set_ylabel(y_label)
         # ax[1].xaxis.set_major_locator(locator)
         # ax[1].xaxis.set_major_formatter(formatter)
@@ -272,8 +272,8 @@ class HydraEBM(HydraModel):
                 # Don't plot y in subplot
                 continue
 
-            perc_contrib_i = round(perc_scores[feature], 2)
-            y_label_i = f"{feature} ({perc_contrib_i*100}%)"
+            perc_contrib_i = round(perc_scores[feature], 3)
+            y_label_i = f"{feature} ({perc_contrib_i*100:.1f}%)"
             ax[i].set_ylabel(y_label_i)
             color = colors[i - 1] if "y" in contrib_plot_features else colors[i - 2]
             agg_scores[feature].plot(

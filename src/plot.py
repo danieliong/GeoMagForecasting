@@ -40,7 +40,7 @@ def plot_prediction(y, ypred, metric, storm, persistence, lead, unit, ax=None):
     if persistence:
         _ = _plot_persistence(y_, lead=lead, metric=metric, unit=unit, ax=ax)
 
-    ax.legend(ncol=3, prop={"size": 7})
+    ax.legend(ncol=3, prop={"size": 8})
     if storm is not None:
         ax.set_title(f"Storm #{storm}")
     ax.set_xlabel("")
