@@ -1,6 +1,14 @@
-download_ace:
-# FIXME: This didn't work
-	wget -r -nH -nc -P data/ --cut-dirs=2 --no-parent --accept *_ace_{swepam,mag}_1m.txt https://sohoftp.nascom.nasa.gov/sdb/goes/ace/daily/ 
 
-download_ace_positions:
-	wget -r -nH -P data/ace/positions --cut-dirs=4 --no-parent --accept *_ace_loc_1h.txt https://sohoftp.nascom.nasa.gov/sdb/goes/ace/monthly/
+GREATLAKES_DIR = daniong@greatlakes-xfer.arc-ts.umich.edu:/home/daniong/geomag-forecasting
+
+download_ace:
+	python src/ace.py
+
+sync_data:
+	rsync -avz --exclude=ace_cdaweb/ \
+		--exclude=ace/ \
+		--exclude=supermag/ \
+		data/ $(GREATLAKES_DIR)/data
+
+compress_ace_cdaweb:
+	./src/compress_ace_cdaweb.sh
