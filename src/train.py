@@ -37,6 +37,8 @@ from src.plot import plot_predictions
 
 logger = logging.getLogger(__name__)
 
+OmegaConf.register_resolver("range", lambda x, y: list(range(int(x), int(y) + 1)))
+
 
 def update_tuned_hyperparams(cfg, features_cfg):
 
