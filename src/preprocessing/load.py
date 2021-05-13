@@ -3,10 +3,14 @@
 import logging
 import pandas as pd
 import numpy as np
+import datetime as dt
 
+
+from dateutil import rrule
 from pathlib import Path
 from omegaconf import OmegaConf
 from hydra.utils import to_absolute_path
+from spacepy import pycdf
 from src import utils
 
 logger = logging.getLogger(__name__)
@@ -50,6 +54,9 @@ ACE_FEATURES = [
     "status_swepam",
     "status_mag",
 ]
+
+# Naming convention: _load_[TYPE]_[NAME]
+# TYPE: features, target
 
 
 def _load_solar_wind(
@@ -129,6 +136,13 @@ def load_positions_ace(path="data/ace_pos_2010-2019.csv", **kwargs):
     return df
 
 
+def load_features_ace_cdaweb(
+    start="1998-01-01", end="2019-12-31", path="data/ace_cdaweb_siciliano.pkl",
+):
+    path = to_absolute_path(path)
+    return pd.read_pickle(path)
+
+
 def load_target_supermag(
     start="2010-01-01",
     end="2019-12-31",
@@ -187,7 +201,7 @@ def load_target_supermag(
 
 
 def load_target_symh(
-    start="2010-01-01",
+    start="1998-01-01",
     end="2019-12-31",
     path="data/symh.csv",
     time_col="times",

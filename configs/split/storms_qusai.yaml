@@ -1,0 +1,9 @@
+# @package _group_
+
+method: storms_qusai
+test_size: 5
+storm_times: data/stormtimes.csv
+test_storms: [74, 95, 71, 49, 99]
+threshold: null
+# threshold: -100
+threshold_less_than: true

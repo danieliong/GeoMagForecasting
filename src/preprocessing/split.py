@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import logging
+import re
 from collections import namedtuple
 
 import numpy as np
@@ -14,8 +15,8 @@ from src.storm_utils import StormAccessor, StormIndexAccessor
 logger = logging.getLogger(__name__)
 
 
-TRAIN = namedtuple("Train", ["X", "y"])
-TEST = namedtuple("Test", ["X", "y"])
+TRAIN = namedtuple("TRAIN", ["X", "y"])
+TEST = namedtuple("TEST", ["X", "y"])
 
 
 class StormSplitter:
@@ -230,7 +231,8 @@ def split_data(method, X, y, test_size=0.2, seed=None, **kwargs):
 
     logger.debug(f"Splitting data by method: {method}")
 
-    if method == "storms":
+    # if method == "storms":
+    if re.match("storms_.", method):
         return split_data_storms(X, y, test_size=test_size, seed=seed, **kwargs)
     elif method == "timeseries":
         return split_data_ts(X, y, test_size=test_size, seed=seed, **kwargs)

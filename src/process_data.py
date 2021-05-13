@@ -3,7 +3,7 @@
 import hydra
 import logging
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 # Load functions from src
 # NOTE: Have to install src as package first
@@ -14,6 +14,8 @@ from src.utils import save_output
 from src.storm_utils import has_storm_index, StormIndexAccessor, StormAccessor
 
 logger = logging.getLogger(__name__)
+
+OmegaConf.register_resolver("range", lambda x, y: list(range(int(x), int(y) + 1)))
 
 
 def _delete_overlap_times(train, test):

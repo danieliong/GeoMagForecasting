@@ -1,0 +1,5 @@
+# @package _group_
+
+method: storms_siciliano
+storm_times: data/stormtimes_siciliano.csv
+test_storms: ${range:26,42}
