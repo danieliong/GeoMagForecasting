@@ -342,7 +342,7 @@ def setup_mlflow(cfg, features_cfg, data_cfg):
             param = OmegaConf.select(data_cfg, param_name)
             if param is not None:
                 if isinstance(param, list):
-                    param = ", ".join(param)
+                    param = ", ".join([str(p) for p in param])
                 mlflow.log_param(name, param)
 
     model_hydra_dir = Path(".hydra")

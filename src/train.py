@@ -198,7 +198,7 @@ def train(cfg):
     model.save_output()
 
     ###########################################################################
-    # Compute/plot/save predictions on test set
+    # Compute/save predictions on test set
     ###########################################################################
 
     logger.info("Computing predictions...")
@@ -215,29 +215,6 @@ def train(cfg):
     if use_mlflow:
         mlflow.log_artifact(pred_path)
 
-    # Plot predictions
-    fig, ax = model.plot(
-        X_test,
-        y_test,
-        lead=features_cfg.lead,
-        unit=features_cfg.lag_processor.unit,
-        **cfg.plot,
-    )
-    if isinstance(fig, list):
-        for f in fig:
-            f.close()
-    else:
-        fig.close()
-
-    # plot_predictions(
-    #     y_test,
-    #     ypred,
-    #     metrics=metrics,
-    #     use_mlflow=use_mlflow,
-    #     persistence=cfg.plot.persistence,
-    #     lead=features_cfg.lead,
-    # )
-
     ###########################################################################
     # Compute and log test metrics
     ###########################################################################
@@ -251,8 +228,40 @@ def train(cfg):
         else:
             mlflow.log_metrics({metrics: test_score})
 
+    ##########################################################################
+    # Plot predictions on test set
+    ##########################################################################
+
+    # Plot predictions
+    plot_kwargs = OmegaConf.to_container(cfg.plot, resolve=True)
+    fig, ax = model.plot(
+        X_test,
+        y_test,
+        lead=features_cfg.lead,
+        unit=features_cfg.lag_processor.unit,
+        **plot_kwargs,
+    )
+    plt.close()
+    # if isinstance(fig, list):
+    #     for f in fig:
+    #         f.close()
+    # elif isinstance(fig, dict):
+    #     for f in fig.values():
+    #         f.close()
+    # else:
+    #     fig.close()
+
     if use_mlflow:
         mlflow.end_run()
+
+    # plot_predictions(
+    #     y_test,
+    #     ypred,
+    #     metrics=metrics,
+    #     use_mlflow=use_mlflow,
+    #     persistence=cfg.plot.persistence,
+    #     lead=features_cfg.lead,
+    # )
 
     # return score
 

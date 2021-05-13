@@ -18,6 +18,8 @@ from src.compute_lagged_features import compute_lagged_features
 
 logger = logging.getLogger(__name__)
 
+OmegaConf.register_resolver("range", lambda x, y: list(range(int(x), int(y) + 1)))
+
 
 @hydra.main(config_path="../configs", config_name="tune_hyperparams")
 def tune_hyperparams(cfg):

@@ -10,7 +10,6 @@ from dateutil import rrule
 from pathlib import Path
 from omegaconf import OmegaConf
 from hydra.utils import to_absolute_path
-from spacepy import pycdf
 from src import utils
 
 logger = logging.getLogger(__name__)

@@ -34,7 +34,6 @@ hydra:
         lower: 0.5
         upper: 1.0
 
-
 tune:
   experiment_name: null
   experiment_id: null
@@ -42,6 +41,8 @@ tune:
   metric: "rmse"
   # filter_string: "params.features=\"['bx', 'by', 'bz']\""
   filter_string: ""
+  # filter_string: "params.features=\"['bx', 'by', 'bz']\""
+  # filter_string: "params.lag=\"0\""
   params:
     - learning_rate
     - max_depth
@@ -49,7 +50,7 @@ tune:
     - colsample_bytree
   kwargs:
     - num_boost_round
-        
+
 param:
   learning_rate: 0.2
   max_depth: 6
@@ -57,7 +58,7 @@ param:
   colsample_bytree: 0.8
 
 mlflow: true
-  
+
 kwargs:
   num_boost_round: 500
   early_stopping_rounds: 10
