@@ -9,7 +9,7 @@ from dateutil import rrule
 
 
 def _generate_data_ace_cdaweb(
-    stormtimes, data_dir, str_format, data_key, index_key, cols_key, **kwargs
+    stormtimes, data_dir, str_format, data_keys, index_key, cols_keys, **kwargs
 ):
     data_dir = Path(data_dir)
 
@@ -18,17 +18,36 @@ def _generate_data_ace_cdaweb(
         dtstart = dt.date.fromisoformat(start)
         until = dt.date.fromisoformat(end)
         for date in rrule.rrule(rrule.DAILY, dtstart=dtstart, until=until):
-            path = data_dir / date.strftime(str_format)
+            # Find file that matches pattern specified in str_format
+            paths = list(data_dir.glob(date.strftime(str_format)))
+            assert len(paths) == 1
+            path = paths[0]
+            # path = data_dir / date.strftime(str_format)
+
             with pycdf.CDF(str(path)) as cdf:
                 times = cdf[index_key][...]
-                columns = cdf[cols_key][...]
-                df = (
+                # columns = cdf[cols_keys][...]
+
+                df_iter = (
                     pd.DataFrame(
-                        cdf[data_key][...], index=times, columns=columns, **kwargs,
+                        cdf[data_key][...],
+                        index=times,
+                        columns=cdf[cols_key][...],
+                        **kwargs,
                     )
                     .resample("T")
                     .mean()
+                    for data_key, cols_key in zip(data_keys, cols_keys)
                 )
+                df = pd.concat(df_iter, axis=1)
+
+                # df = (
+                #     pd.DataFrame(
+                #         cdf[data_key][...], index=times, columns=columns, **kwargs,
+                #     )
+                #     .resample("T")
+                #     .mean()
+                # )
                 index = pd.MultiIndex.from_product(
                     [[i], df.index], names=["storm", "times"]
                 )
@@ -42,9 +61,9 @@ def load_features_ace_cdaweb(
     end="2019-12-31",
     stormtimes_path=None,
     str_format="%Y/ac_h3_mfi_%Y%m%d.cdf",
-    data_key="BGSM",
+    data_keys=["BGSM"],
+    cols_keys=["label_bgsm"],
     index_key="Epoch",
-    cols_key="label_bgsm",
     **kwargs,
 ):
     # XXX: This function takes a long time since the data is in 1 second resolution
@@ -55,9 +74,9 @@ def load_features_ace_cdaweb(
             stormtimes=stormtimes,
             data_dir=data_dir,
             str_format=str_format,
-            data_key=data_key,
+            data_keys=data_keys,
             index_key=index_key,
-            cols_key=cols_key,
+            cols_keys=cols_keys,
             **kwargs,
         )
         data = pd.concat(data_iter)
