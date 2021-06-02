@@ -12,3 +12,6 @@ sync_data:
 
 compress_ace_cdaweb:
 	./src/compress_ace_cdaweb.sh
+
+uncompress_ace_cdaweb:
+	./src/uncompress_ace_cdaweb.sh
