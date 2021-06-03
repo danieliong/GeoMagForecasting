@@ -4,17 +4,22 @@ name: ace_cdaweb
 
 load:
   path: data/ace_cdaweb_siciliano.pkl
-  # features:
-  #   - "bx"
-  #   - "by"
-  #   - "bz"
+  features:
+    - bx
+    - by
+    - bz
+    - vx
+    - density
+    - temperature
+    - x
 
+# QUESTION: Where is this used?
 columns:
   times: "times"
-  # speed: "speed"
-  # density: "density"
-  # temperature: "temperature"
-  # x_coord: "x"
+  speed: "vx"
+  density: "density"
+  temperature: "temperature"
+  x_coord: "x"
   # status: ["status_swepam", "status_mag"]
 
 pipeline:
@@ -43,15 +48,17 @@ pipeline:
     inverse_func: null
     kwargs: null
   values_filter:
-    bad_values: [-9999, 999, 999.9, -999.9]
+    bad_values: [-1e31]
+    # bad_values: [-9999, 999, 999.9, -999.9]
     value_ranges:
-      x: [0, 300]
+      # Obtained from CDF metadata
+      x: [-2000000, 2000000]
       density: [0, 200]
-      speed: [200, 2000]
-      temperature: [1e4, 1e7]
-      bx: [-200, 200]
-      by: [-200, 200]
-      bz: [-200, 200]
+      vx: [-1800, 0]
+      temperature: [1000, 1100000]
+      bx: [-65534, 65534]
+      by: [-65534, 65534]
+      bz: [-65534, 65534]
   filter:
     type: "limited_change"
     speed_col: ${features.columns.speed}
@@ -68,6 +75,7 @@ pipeline:
     time_level: ${features.columns.times}
     delete_cols: false
     freq: "T"
+    x_units: "km"
   delete_cols:
     - ${features.columns.x_coord}
     - ${features.columns.status}

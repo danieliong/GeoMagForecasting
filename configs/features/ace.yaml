@@ -16,15 +16,14 @@ load:
     - "status_swepam"
     - "status_mag"
 
-
 columns:
   times: "times"
   speed: "speed"
   density: "density"
   temperature: "temperature"
   x_coord: "x"
-  status: [ "status_swepam", "status_mag" ]
-    
+  status: ["status_swepam", "status_mag"]
+
 pipeline:
   # Arguments for HydraPipeline
   order:
@@ -41,7 +40,7 @@ pipeline:
     limit_direction: both
     limit: 15
   resample:
-    freq: '5T'
+    freq: "5T"
     func: "mean"
   scaler:
     scaler: null
@@ -51,15 +50,15 @@ pipeline:
     inverse_func: null
     kwargs: null
   values_filter:
-    bad_values: [ -9999, 999, 999.9, -999.9 ]
+    bad_values: [-9999, 999, 999.9, -999.9]
     value_ranges:
-      x: [ 0, 300 ]
-      density: [ 0, 200 ]
-      speed: [ 200, 2000 ]
-      temperature: [ 1e4, 1e7 ]
-      bx: [ -200, 200 ]
-      by: [ -200, 200 ]
-      bz: [ -200, 200 ]
+      x: [0, 300]
+      density: [0, 200]
+      speed: [200, 2000]
+      temperature: [1e4, 1e7]
+      bx: [-200, 200]
+      by: [-200, 200]
+      bz: [-200, 200]
   filter:
     type: "limited_change"
     speed_col: ${features.columns.speed}
@@ -69,13 +68,14 @@ pipeline:
     limited_change:
       factor: 1.3
       change_down: 30
-      change_ups: [ 50, 10 ]
-  propagate: 
+      change_ups: [50, 10]
+  propagate:
     x_coord_col: ${features.columns.x_coord}
     speed_col: ${features.columns.speed}
     time_level: ${features.columns.times}
     delete_cols: false
     freq: "T"
+    x_units: "re"
   delete_cols:
     - ${features.columns.x_coord}
     - ${features.columns.status}

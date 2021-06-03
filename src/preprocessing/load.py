@@ -54,6 +54,8 @@ ACE_FEATURES = [
     "status_mag",
 ]
 
+ACE_CDAWEB_FEATURES = ["density", "vx", "temperature", "bx", "by", "bz"]
+
 # Naming convention: _load_[TYPE]_[NAME]
 # TYPE: features, target
 
@@ -136,10 +138,14 @@ def load_positions_ace(path="data/ace_pos_2010-2019.csv", **kwargs):
 
 
 def load_features_ace_cdaweb(
-    start="1998-01-01", end="2019-12-31", path="data/ace_cdaweb_siciliano.pkl",
+    start="1998-01-01",
+    end="2019-12-31",
+    path="data/ace_cdaweb_siciliano.pkl",
+    features=ACE_CDAWEB_FEATURES,
 ):
     path = to_absolute_path(path)
-    return pd.read_pickle(path)
+    df = pd.read_pickle(path)
+    return df[features]
 
 
 def load_target_supermag(

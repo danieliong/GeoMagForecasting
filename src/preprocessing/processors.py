@@ -279,6 +279,8 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
         freq=None,
         delete_cols=True,
         force=False,
+        x_units="km",
+        # speed_units="km/s",
     ):
         self.x_coord_col = x_coord_col
         self.speed_col = speed_col
@@ -286,6 +288,7 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
         self.freq = freq
         self.delete_cols = delete_cols
         self.force = force
+        self.x_units = x_units
         # TODO: Load positions from position_path if it is not None
 
     def fit(self, X, y=None):
@@ -318,7 +321,11 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
 
         assert isinstance(times, pd.DatetimeIndex)
 
-        delta_x = (x_coord - X0_RE) * KM_PER_RE
+        if self.x_units == "km":
+            delta_x = x_coord - (X0_RE * KM_PER_RE)
+        elif self.x_units == "re":
+            delta_x = (x_coord - X0_RE) * KM_PER_RE
+
         time_delay = pd.to_timedelta(delta_x / speed, unit="sec")
         propagated_time = cls._make_time_nondecreasing(times + time_delay)
 
@@ -338,7 +345,7 @@ class SolarWindPropagator(BaseEstimator, TransformerMixin):
 
         X_ = X.copy()
         x_coord = X_[self.x_coord_col].copy()
-        speed = X_[self.speed_col].copy()
+        speed = X_[self.speed_col].copy().abs()
         # times = X_.index.get_level_values(self.time_level)
 
         # NOTE: Couldn't use iterate_storms_method here because we want to
