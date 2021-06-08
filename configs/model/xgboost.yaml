@@ -56,6 +56,9 @@ param:
   max_depth: 6
   min_child_weight: 2
   colsample_bytree: 0.8
+  booster: "dart"
+  rate_drop: 0.1
+  skip_drop: 0.5
 
 mlflow: true
 

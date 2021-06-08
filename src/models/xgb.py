@@ -131,6 +131,19 @@ class HydraXGB(HydraModel):
         ypred = self.model.predict(dtest)
         return ypred
 
+    def compute_shap_values(self, X):
+        assert self.model is not None
+        # import shap
+
+        # explainer = shap.TreeExplainer(self.model)
+        # shap_values = explainer.shap_values(X)
+        dtest = xgb.DMatrix(X, feature_names=self.feature_names_)
+        shap_values = self.model.predict(dtest, pred_contribs=True)
+
+        col_names = self.feature_names_ + ["bias"]
+
+        return pd.DataFrame(shap_values, columns=col_names, index=X.index)
+
     def _save_output(self):
         if self.model is not None:
             self.model.save_model(self.outputs["model"])

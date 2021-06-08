@@ -135,7 +135,3 @@ def plot_predictions(
         pdf.close()
 
     return fig, ax
-
-
-def plot_storms(dst_path):
-    pass

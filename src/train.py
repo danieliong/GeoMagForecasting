@@ -215,6 +215,13 @@ def train(cfg):
     if use_mlflow:
         mlflow.log_artifact(pred_path)
 
+    # XXX: TEMPORARY
+    if hasattr(model, "compute_shap_values"):
+        shap_values = model.compute_shap_values(X_test)
+        shap_values.to_pickle("shap_values.pkl")
+        if use_mlflow:
+            mlflow.log_artifact("shap_values.pkl")
+
     ###########################################################################
     # Compute and log test metrics
     ###########################################################################

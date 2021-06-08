@@ -20,8 +20,22 @@ retrieve_results_for_paper:
 	python src/retrieve_results_from_mlflow.py \
 		-m xgboost -l 60 -f ace_cdaweb -o $(PAPER_RESULTS)/xgboost_60_imf_only
 	python src/retrieve_results_from_mlflow.py \
+		-m xgboost -l 60 -f ace_cdaweb -o $(PAPER_RESULTS)/xgboost_60_sw_imf \
+		-s "param.booster='dart'"
+	python src/retrieve_results_from_mlflow.py \
 		-m xgboost -l 120 -f ace_cdaweb -o $(PAPER_RESULTS)/xgboost_120_imf_only
 	python src/retrieve_results_from_mlflow.py \
-		-m ebm -l 60 -f ace_cdaweb -o $(PAPER_RESULTS)/ebm_60_imf_only
+		-m ebm -l 60 -f ace_cdaweb -s "tags.features='imf_only'"\
+		-o $(PAPER_RESULTS)/ebm_60_imf_only
 	python src/retrieve_results_from_mlflow.py \
-		-m ebm -l 120 -f ace_cdaweb -o $(PAPER_RESULTS)/ebm_120_imf_only
+		-m ebm -l 120 -f ace_cdaweb -s "tags.features='imf_only'" \
+		-o $(PAPER_RESULTS)/ebm_120_imf_only
+	python src/retrieve_results_from_mlflow.py \
+		-m ebm -l 60 -f ace_cdaweb -s "tags.features='sw_imf'" \
+		-o $(PAPER_RESULTS)/ebm_60_sw_imf
+	python src/retrieve_results_from_mlflow.py \
+		-m ebm -l 120 -f ace_cdaweb -s "tags.features='sw_imf'" \
+		-o $(PAPER_RESULTS)/ebm_120_sw_imf
+	python src/retrieve_results_from_mlflow.py \
+		-m ebm -l 60 -f ace_cdaweb -s "tags.features='sw_imf2'" \
+		-o $(PAPER_RESULTS)/ebm_60_sw_imf2

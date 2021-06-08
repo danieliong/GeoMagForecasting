@@ -460,6 +460,32 @@ class LimitedChangeFilter(BaseEstimator, TransformerMixin):
         return X
 
 
+class FeaturesAdder(BaseEstimator, TransformerMixin):
+    def __init__(self, new_features=[]):
+        self.new_features = new_features
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+
+        if len(self.new_features) == 0:
+            return X
+
+        X_ = X.copy()
+
+        for new_feat in self.new_features:
+            # TODO: Find nicer way to add new features
+            if new_feat == "bz_vx" and all(feat in X_.columns for feat in ["bz", "vx"]):
+                X_[new_feat] = X_["bz"].where(X_["bz"] > 0, 0) * X_["vx"]
+            elif new_feat == "b2_vx" and all(
+                feat in X_.columns for feat in ["bx", "by", "bz", "vx"]
+            ):
+                X_[new_feat] = X_.eval("(bx**2 + by**2 + bz**2) * vx")
+
+        return X_
+
+
 class HydraPipeline(BaseEstimator, TransformerMixin):
     def __init__(self, cfg):
         # TODO: Change this to take general arguments to make it more general.
@@ -584,6 +610,11 @@ class HydraPipeline(BaseEstimator, TransformerMixin):
             self.add_step("scaler", transformer)
         else:
             logger.debug("Scaler or func was not specified.")
+
+    @pipeline_step("add_features")
+    def _add_add_features(self, params):
+        if OmegaConf.is_config(params):
+            return FeaturesAdder(**params)
 
     def create_pipeline(self):
         logger.info("Creating pipeline...")

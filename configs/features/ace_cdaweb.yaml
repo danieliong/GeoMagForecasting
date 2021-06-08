@@ -11,7 +11,7 @@ load:
     - vx
     - density
     - temperature
-    - x
+    # - x
 
 # QUESTION: Where is this used?
 columns:
@@ -22,6 +22,8 @@ columns:
   x_coord: "x"
   # status: ["status_swepam", "status_mag"]
 
+new_features: []
+
 pipeline:
   # Arguments for HydraPipeline
   order:
@@ -30,6 +32,7 @@ pipeline:
     # - propagate
     # - delete_cols
     - resample
+    - add_features
     - interpolate
     - scaler_func
   interpolate:
@@ -79,3 +82,5 @@ pipeline:
   delete_cols:
     - ${features.columns.x_coord}
     - ${features.columns.status}
+  add_features:
+    new_features: ${features.new_features}
