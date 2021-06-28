@@ -3,7 +3,7 @@
 name: ace_cdaweb
 
 load:
-  path: data/ace_cdaweb_siciliano.pkl
+  path: data/ace_cdaweb_combined.pkl
   features:
     - bx
     - by
@@ -11,7 +11,7 @@ load:
     - vx
     - density
     - temperature
-    # - x
+    - x
 
 # QUESTION: Where is this used?
 columns:

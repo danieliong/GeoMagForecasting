@@ -124,7 +124,9 @@ class StormSplitter:
         if not self._storms_subsetted(y):
             y = self.subset_data(y)
 
-        if test_storms is None:
+        if "test" in self.storm_times:
+            test_storms = self.storm_times.query("test == True").index
+        elif test_storms is None:
 
             is_float = isinstance(test_size, float)
             is_int = isinstance(test_size, int)
