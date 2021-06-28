@@ -9,7 +9,7 @@ from dateutil import rrule
 
 
 def _generate_data_ace_cdaweb(
-    stormtimes, data_dir, str_format, data_keys, index_key, **kwargs
+    stormtimes, data_dir, str_format, data_keys, index_key, freq, **kwargs
 ):
     data_dir = Path(data_dir)
 
@@ -20,12 +20,25 @@ def _generate_data_ace_cdaweb(
             elif isinstance(label, list):
                 columns = label
 
-            yield pd.DataFrame(
+            df = pd.DataFrame(
                 cdf[data_key][...],
                 index=cdf[index_key][...],
                 columns=columns,
                 **kwargs,
-            ).resample("T").mean()
+            )
+
+            if freq is not None:
+                # Fill NA values
+                meta = cdf[data_key].meta
+                df.where(df != meta["FILLVAL"], inplace=True)
+                df.where(df >= meta["VALIDMIN"], inplace=True)
+                df.where(df <= meta["VALIDMAX"], inplace=True)
+
+                df = df.resample("T").mean()
+
+            # Resample to 1-minute resolution
+            # yield df.resample("T").mean()
+            yield df
 
     for i, (start, end) in stormtimes[["start_time", "end_time"]].iterrows():
         print(f"Storm #{i}")
@@ -79,6 +92,7 @@ def load_features_ace_cdaweb(
     str_format="%Y/ac_h3_mfi_%Y%m%d.cdf",
     data_keys={"BGSM": "label_bgsm"},
     index_key="Epoch",
+    freq=None,
     **kwargs,
 ):
     # XXX: This function takes a long time since the data is in 1 second resolution
@@ -92,6 +106,7 @@ def load_features_ace_cdaweb(
             data_keys=data_keys,
             index_key=index_key,
             # cols_keys=cols_keys,
+            freq=freq,
             **kwargs,
         )
         data = pd.concat(data_iter)
@@ -109,35 +124,60 @@ if __name__ == "__main__":
     stormtimes_path = "data/stormtimes_combined.csv"
     data_path = "data/ace_cdaweb_combined.pkl"
 
-    swepam_data_dir = "data/ace_cdaweb/swepam"
-    swepam_str_fmt = "%Y/ac_h0_swe_%Y%m%d_*.cdf"
-    swepam_data_keys = {
-        "V_GSM": ["vx", "vy", "vz"],
-        "Np": ["density"],
-        "Tpr": ["temperature"],
-        "SC_pos_GSM": ["x", "y", "z"],
-    }
-    # swepam_data_keys = ["V_GSM", "Np", "Tpr"]
-    # swepam_cols_keys = ["label_V_GSM", ["density"], ["temperature"]]
+    def save_data_storm(stormtimes, swepam_save_path, mag_save_path, save_path=None):
 
-    print("Loading SWEPAM data...")
-    swepam_data = load_features_ace_cdaweb(
-        data_dir=swepam_data_dir,
-        stormtimes_path=stormtimes_path,
-        str_format=swepam_str_fmt,
-        data_keys=swepam_data_keys,
-    )
+        # save_path = Path(save_path)
+        # if save_path.exists():
+        # print(f"{save_path} already exists.")
+        # return None
 
-    mag_data_dir = "data/ace_cdaweb/mag"
-    mag_str_fmt = "%Y/ac_h3_mfi_%Y%m%d.cdf"
-    mag_data_keys = {"BGSM": ["bx", "by", "bz"]}
+        print(f"Reading storms from {stormtimes}")
 
-    print("Loading MAG data...")
-    mag_data = load_features_ace_cdaweb(
-        data_dir=mag_data_dir,
-        stormtimes_path=stormtimes_path,
-        str_format=mag_str_fmt,
-        data_keys=mag_data_keys,
+        swepam_data_dir = "data/ace_cdaweb/swepam"
+        swepam_str_fmt = "%Y/ac_h0_swe_%Y%m%d_*.cdf"
+        swepam_data_keys = {
+            "V_GSM": ["vx", "vy", "vz"],
+            "Np": ["density"],
+            "Tpr": ["temperature"],
+            "SC_pos_GSM": ["x", "y", "z"],
+        }
+        # swepam_data_keys = ["V_GSM", "Np", "Tpr"]
+        # swepam_cols_keys = ["label_V_GSM", ["density"], ["temperature"]]
+
+        print("Loading SWEPAM data...")
+        swepam_data = load_features_ace_cdaweb(
+            data_dir=swepam_data_dir,
+            stormtimes_path=stormtimes,
+            str_format=swepam_str_fmt,
+            data_keys=swepam_data_keys,
+        )
+        swepam_data.to_pickle(swepam_save_path)
+
+        mag_data_dir = "data/ace_cdaweb/mag"
+        mag_str_fmt = "%Y/ac_h3_mfi_%Y%m%d.cdf"
+        mag_data_keys = {"BGSM": ["bx", "by", "bz"]}
+
+        print("Loading MAG data...")
+        mag_data = load_features_ace_cdaweb(
+            data_dir=mag_data_dir,
+            stormtimes_path=stormtimes,
+            str_format=mag_str_fmt,
+            data_keys=mag_data_keys,
+            freq="5T",
+        )
+        mag_data.to_pickle(mag_save_path)
+
+        if save_path is not None:
+            data = pd.concat([swepam_data, mag_data], axis=1)
+            print(f"Saving data to {save_path}")
+            data.to_pickle(save_path)
+
+    # save_data_storm("data/stormtimes_siciliano.csv", "data/ace_cdaweb_siciliano.pkl")
+    # save_data_storm("data/stormtimes.csv", "data/ace_cdaweb_orig_storms.pkl")
+    save_data_storm(
+        "data/stormtimes.csv",
+        swepam_save_path="data/ace_cdaweb_orig_swepam.pkl",
+        mag_save_path="data/ace_cdaweb_orig_mag.pkl",
     )
 
     data = pd.concat([swepam_data, mag_data], axis=1)

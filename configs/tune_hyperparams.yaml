@@ -44,7 +44,11 @@ hydra:
     config:
       override_dirname:
         exclude_keys:
+          - experiment_name
+          # - features.load.features
+          - lagged_features
           - data
+          - features
           - tags
           - experiment_id
           - split

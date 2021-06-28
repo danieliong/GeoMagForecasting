@@ -18,10 +18,14 @@ uncompress_ace_cdaweb:
 	./src/uncompress_ace_cdaweb.sh
 retrieve_results_for_paper:
 	python src/retrieve_results_from_mlflow.py \
-		-m xgboost -l 60 -f ace_cdaweb -o $(PAPER_RESULTS)/xgboost_60_imf_only
+		-m xgboost -l 60 -f ace_cdaweb -o $(PAPER_RESULTS)/xgboost_60_imf_only \
+		-s "param.booster='dart' and tags.features='imf_only'"
 	python src/retrieve_results_from_mlflow.py \
 		-m xgboost -l 60 -f ace_cdaweb -o $(PAPER_RESULTS)/xgboost_60_sw_imf \
-		-s "param.booster='dart'"
+		-s "param.booster='dart' and tags.features='sw_imf'"
+	python src/retrieve_results_from_mlflow.py \
+		-m xgboost -l 60 -f ace_cdaweb -o $(PAPER_RESULTS)/xgboost_60_sw_notemp \
+		-s "param.booster='dart' and tags.features='sw_imf_notemp'"
 	python src/retrieve_results_from_mlflow.py \
 		-m xgboost -l 120 -f ace_cdaweb -o $(PAPER_RESULTS)/xgboost_120_imf_only
 	python src/retrieve_results_from_mlflow.py \
