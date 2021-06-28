@@ -27,7 +27,7 @@ def _generate_data_ace_cdaweb(
                 **kwargs,
             ).resample("T").mean()
 
-    for i, (start, end) in stormtimes.iterrows():
+    for i, (start, end) in stormtimes[["start_time", "end_time"]].iterrows():
         print(f"Storm #{i}")
         dtstart = dt.datetime.fromisoformat(start)
         until = dt.datetime.fromisoformat(end)
@@ -105,7 +105,9 @@ def load_features_ace_cdaweb(
 
 
 if __name__ == "__main__":
-    stormtimes_path = "data/stormtimes_siciliano.csv"
+    # TODO: Create CLI
+    stormtimes_path = "data/stormtimes_combined.csv"
+    data_path = "data/ace_cdaweb_combined.pkl"
 
     swepam_data_dir = "data/ace_cdaweb/swepam"
     swepam_str_fmt = "%Y/ac_h0_swe_%Y%m%d_*.cdf"
@@ -139,5 +141,5 @@ if __name__ == "__main__":
     )
 
     data = pd.concat([swepam_data, mag_data], axis=1)
-    print("Saving data to data/ace_cdaweb_siciliano.pkl")
-    data.to_pickle("data/ace_cdaweb_siciliano.pkl")
+    print(f"Saving data to {data_path}")
+    data.to_pickle(data_path)
