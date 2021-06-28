@@ -175,11 +175,7 @@ if __name__ == "__main__":
     # save_data_storm("data/stormtimes_siciliano.csv", "data/ace_cdaweb_siciliano.pkl")
     # save_data_storm("data/stormtimes.csv", "data/ace_cdaweb_orig_storms.pkl")
     save_data_storm(
-        "data/stormtimes.csv",
+        stormtimes_path,
         swepam_save_path="data/ace_cdaweb_orig_swepam.pkl",
         mag_save_path="data/ace_cdaweb_orig_mag.pkl",
     )
-
-    data = pd.concat([swepam_data, mag_data], axis=1)
-    print(f"Saving data to {data_path}")
-    data.to_pickle(data_path)
