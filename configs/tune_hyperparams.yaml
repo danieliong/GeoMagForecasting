@@ -38,8 +38,9 @@ tags:
 hydra:
   verbose: false
   sweep:
-    dir: multirun/${model}/${now:%Y-%m-%d_%H-%M}
-    subdir: ${hydra.job.override_dirname}
+    dir: multirun/${model}
+    subdir: ${now:%Y-%m-%d_%H-%M}
+    # subdir: ${hydra.job.override_dirname}
   job:
     config:
       override_dirname:
@@ -52,3 +53,6 @@ hydra:
           - tags
           - experiment_id
           - split
+          - experiment_name
+          - features.load.features
+          - lagged_features

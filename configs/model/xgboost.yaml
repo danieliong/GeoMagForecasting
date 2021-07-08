@@ -33,6 +33,14 @@ hydra:
         # init: 0.8
         lower: 0.5
         upper: 1.0
+      param.rate_drop:
+        init: 0.1
+        lower: 0.0
+        upper: 0.5
+      param.skip_drop:
+        init: 0.5
+        lower: 0.25
+        upper: 0.75
 
 tune:
   experiment_name: null
@@ -48,6 +56,8 @@ tune:
     - max_depth
     - min_child_weight
     - colsample_bytree
+    - rate_drop
+    - skip_drop
   kwargs:
     - num_boost_round
 

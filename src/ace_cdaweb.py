@@ -1,11 +1,15 @@
 #!/usr/bin/env jupyter
 
+import warnings
 import pandas as pd
 import datetime as dt
 
 from spacepy import pycdf
 from pathlib import Path
 from dateutil import rrule
+
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 def _generate_data_ace_cdaweb(
@@ -34,7 +38,7 @@ def _generate_data_ace_cdaweb(
                 df.where(df >= meta["VALIDMIN"], inplace=True)
                 df.where(df <= meta["VALIDMAX"], inplace=True)
 
-                df = df.resample("T").mean()
+                df = df.resample(freq).mean()
 
             # Resample to 1-minute resolution
             # yield df.resample("T").mean()
@@ -122,7 +126,11 @@ def load_features_ace_cdaweb(
 if __name__ == "__main__":
     # TODO: Create CLI
     stormtimes_path = "data/stormtimes_combined.csv"
+    freq = "5T"
+
     data_path = "data/ace_cdaweb_combined.pkl"
+    mag_path = "data/ace_cdaweb_combined_mag.pkl"
+    swepam_path = "data/ace_cdaweb_combined_swepam.pkl"
 
     def save_data_storm(stormtimes, swepam_save_path, mag_save_path, save_path=None):
 
@@ -150,6 +158,7 @@ if __name__ == "__main__":
             stormtimes_path=stormtimes,
             str_format=swepam_str_fmt,
             data_keys=swepam_data_keys,
+            freq=freq,
         )
         swepam_data.to_pickle(swepam_save_path)
 
@@ -163,7 +172,7 @@ if __name__ == "__main__":
             stormtimes_path=stormtimes,
             str_format=mag_str_fmt,
             data_keys=mag_data_keys,
-            freq="5T",
+            freq=freq,
         )
         mag_data.to_pickle(mag_save_path)
 
@@ -176,6 +185,7 @@ if __name__ == "__main__":
     # save_data_storm("data/stormtimes.csv", "data/ace_cdaweb_orig_storms.pkl")
     save_data_storm(
         stormtimes_path,
-        swepam_save_path="data/ace_cdaweb_orig_swepam.pkl",
-        mag_save_path="data/ace_cdaweb_orig_mag.pkl",
+        swepam_save_path=swepam_path,
+        mag_save_path=mag_path,
+        save_path=data_path,
     )

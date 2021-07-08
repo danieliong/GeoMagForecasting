@@ -20,6 +20,7 @@ columns:
   density: "density"
   temperature: "temperature"
   x_coord: "x"
+  status: []
   # status: ["status_swepam", "status_mag"]
 
 new_features: []
@@ -30,7 +31,7 @@ pipeline:
     - values_filter
     - filter
     # - propagate
-    # - delete_cols
+    - delete_cols
     - resample
     - add_features
     - interpolate

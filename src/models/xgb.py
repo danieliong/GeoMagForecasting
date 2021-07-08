@@ -48,7 +48,7 @@ class HydraXGB(HydraModel):
         mlflow.xgboost.autolog()
 
     def cross_validate(self, dtrain):
-        num_boost_round = getattr(self.kwargs, "num_boost_round", 100)
+        num_boost_round = getattr(self.kwargs, "num_boost_round", 50)
         early_stopping_rounds = getattr(self.kwargs, "early_stopping_rounds", 30)
 
         if self.mlflow:
