@@ -19,6 +19,7 @@ dependencies:
   - xgboost
   - lightgbm
   - matplotlib
+  - xeus-python
 
   - pip:
-    - -r file:requirements.txt
+      - -r file:requirements.txt
