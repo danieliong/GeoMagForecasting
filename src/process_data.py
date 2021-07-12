@@ -83,7 +83,7 @@ def main(cfg: DictConfig) -> None:
     y_train, y_test = _delete_overlap_times(y_train, y_test)
 
     # HACK: For some reason, X_test's storm index is not sorted.
-    if split_kwargs.method == "storms":
+    if "storms" in split_kwargs.method:
         if not X_train.storms.level.equals(y_train.storms.level):
             X_train.sort_index(level="storm", inplace=True)
             y_train.sort_index(level="storm", inplace=True)
