@@ -1,5 +1,6 @@
-#!/usr/bin/env jupyter
+#!/usr/bin/env python3
 
+import click
 import warnings
 import pandas as pd
 import datetime as dt
@@ -7,9 +8,20 @@ import datetime as dt
 from spacepy import pycdf
 from pathlib import Path
 from dateutil import rrule
-
+from tqdm import tqdm
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+SWEPAM_STR_FMT = "%Y/ac_h0_swe_%Y%m%d_*.cdf"
+SWEPAM_DATA_KEYS = {
+    "V_GSM": ["vx", "vy", "vz"],
+    "Np": ["density"],
+    "Tpr": ["temperature"],
+    "SC_pos_GSM": ["x", "y", "z"],
+}
+
+MAG_STR_FMT = "%Y/ac_h3_mfi_%Y%m%d.cdf"
+MAG_DATA_KEYS = {"BGSM": ["bx", "by", "bz"]}
 
 
 def _generate_data_ace_cdaweb(
@@ -44,8 +56,10 @@ def _generate_data_ace_cdaweb(
             # yield df.resample("T").mean()
             yield df
 
-    for i, (start, end) in stormtimes[["start_time", "end_time"]].iterrows():
-        print(f"Storm #{i}")
+    for i, (start, end) in tqdm(
+        list(stormtimes[["start_time", "end_time"]].iterrows())
+    ):
+        # print(f"Storm #{i}")
         dtstart = dt.datetime.fromisoformat(start)
         until = dt.datetime.fromisoformat(end)
         for date in rrule.rrule(rrule.DAILY, dtstart=dtstart, until=until):
@@ -90,8 +104,8 @@ def _generate_data_ace_cdaweb(
 
 def load_features_ace_cdaweb(
     data_dir="data/ace_cdaweb",
-    start="2010-01-01",
-    end="2019-12-31",
+    # start="2010-01-01",
+    # end="2019-12-31",
     stormtimes_path=None,
     str_format="%Y/ac_h3_mfi_%Y%m%d.cdf",
     data_keys={"BGSM": "label_bgsm"},
@@ -123,69 +137,95 @@ def load_features_ace_cdaweb(
     return data
 
 
-if __name__ == "__main__":
-    # TODO: Create CLI
-    stormtimes_path = "data/stormtimes_combined.csv"
-    freq = "5T"
+@click.command()
+@click.option("--stormtimes", "-t", help="Path to stormtimes.")
+@click.option("--output-path", "-o", help="Path to output combined SWEPAM/MAG data.")
+@click.option("--swepam/--no-swepam", default=True, help="Save SWEPAM data.")
+@click.option("--mag/--no-mag", default=True, help="Save MAG data.")
+@click.option(
+    "--swepam-dir",
+    default="data/ace_cdaweb/swepam",
+    help="Path to SWEPAM data directory.",
+)
+@click.option(
+    "--mag-dir", default="data/ace_cdaweb/mag", help="Path to MAG data directory."
+)
+@click.option("--swepam-path", default=None, help="Path to output SWEPAM data.")
+@click.option("--mag-path", default=None, help="Path to output MAG data.")
+@click.option("--freq", default="5T", help="Frequency to resample data to.")
+def save_data_storm(
+    stormtimes,
+    output_path,
+    swepam=True,
+    mag=True,
+    swepam_dir="data/ace_cdaweb/swepam",
+    mag_dir="data/ace_cdaweb/mag",
+    swepam_path=None,
+    mag_path=None,
+    freq="5T",
+):
 
-    data_path = "data/ace_cdaweb_combined.pkl"
-    mag_path = "data/ace_cdaweb_combined_mag.pkl"
-    swepam_path = "data/ace_cdaweb_combined_swepam.pkl"
+    print(f"Reading storms from {stormtimes}")
 
-    def save_data_storm(stormtimes, swepam_save_path, mag_save_path, save_path=None):
+    data_list = []
 
-        # save_path = Path(save_path)
-        # if save_path.exists():
-        # print(f"{save_path} already exists.")
-        # return None
-
-        print(f"Reading storms from {stormtimes}")
-
-        swepam_data_dir = "data/ace_cdaweb/swepam"
-        swepam_str_fmt = "%Y/ac_h0_swe_%Y%m%d_*.cdf"
-        swepam_data_keys = {
-            "V_GSM": ["vx", "vy", "vz"],
-            "Np": ["density"],
-            "Tpr": ["temperature"],
-            "SC_pos_GSM": ["x", "y", "z"],
-        }
-        # swepam_data_keys = ["V_GSM", "Np", "Tpr"]
-        # swepam_cols_keys = ["label_V_GSM", ["density"], ["temperature"]]
-
+    if swepam:
         print("Loading SWEPAM data...")
         swepam_data = load_features_ace_cdaweb(
-            data_dir=swepam_data_dir,
+            data_dir=swepam_dir,
             stormtimes_path=stormtimes,
-            str_format=swepam_str_fmt,
-            data_keys=swepam_data_keys,
+            str_format=SWEPAM_STR_FMT,
+            data_keys=SWEPAM_DATA_KEYS,
             freq=freq,
         )
-        swepam_data.to_pickle(swepam_save_path)
+        data_list.append(swepam_data)
+        if swepam_path is not None:
+            print(f"Saving SWEPAM data to {swepam_path}")
+            swepam_data.to_pickle(swepam_path)
 
-        mag_data_dir = "data/ace_cdaweb/mag"
-        mag_str_fmt = "%Y/ac_h3_mfi_%Y%m%d.cdf"
-        mag_data_keys = {"BGSM": ["bx", "by", "bz"]}
-
+    if mag:
         print("Loading MAG data...")
         mag_data = load_features_ace_cdaweb(
-            data_dir=mag_data_dir,
+            data_dir=mag_dir,
             stormtimes_path=stormtimes,
-            str_format=mag_str_fmt,
-            data_keys=mag_data_keys,
+            str_format=MAG_STR_FMT,
+            data_keys=MAG_DATA_KEYS,
             freq=freq,
         )
-        mag_data.to_pickle(mag_save_path)
+        data_list.append(mag_data)
+        if mag_path is not None:
+            print(f"Saving MAG data to {mag_path}")
+            mag_data.to_pickle(mag_path)
 
-        if save_path is not None:
-            data = pd.concat([swepam_data, mag_data], axis=1)
-            print(f"Saving data to {save_path}")
-            data.to_pickle(save_path)
+    data = pd.concat(data_list, axis=1)
+    if output_path is not None:
+        print(f"Saving combined data to {output_path}")
+        data.to_pickle(output_path)
 
-    # save_data_storm("data/stormtimes_siciliano.csv", "data/ace_cdaweb_siciliano.pkl")
-    # save_data_storm("data/stormtimes.csv", "data/ace_cdaweb_orig_storms.pkl")
-    save_data_storm(
-        stormtimes_path,
-        swepam_save_path=swepam_path,
-        mag_save_path=mag_path,
-        save_path=data_path,
-    )
+    return data
+
+
+if __name__ == "__main__":
+    save_data_storm()
+
+    # # TODO: Create CLI
+    # stormtimes_path = "data/stormtimes_combined.csv"
+    # freq = "5T"
+
+    # data_path = "data/ace_cdaweb_combined.pkl"
+    # mag_path = "data/ace_cdaweb_combined_mag.pkl"
+    # swepam_path = "data/ace_cdaweb_combined_swepam.pkl"
+
+    # # save_data_storm("data/stormtimes_siciliano.csv", "data/ace_cdaweb_siciliano.pkl")
+    # # save_data_storm("data/stormtimes.csv", "data/ace_cdaweb_orig_storms.pkl")
+    # save_data_storm(
+    #     stormtimes_path,
+    #     swepam_save_path=swepam_path,
+    #     mag_save_path=mag_path,
+    #     save_path=data_path,
+    # )
+
+    # save_data_storm(
+    #     stormtimes="data/stormtimes_siciliano.csv",
+    #     output_path="data/ace_cdaweb_siciliano.pkl",
+    # )
