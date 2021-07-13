@@ -9,6 +9,7 @@ import xgboost as xgb
 from omegaconf import OmegaConf
 from ._hydra_model import HydraModel
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -121,6 +122,42 @@ class HydraXGB(HydraModel):
             mlflow.log_param("num_boost_round", opt_num_trees)
 
         return float(min(self.cv_res_[f"test-{self.cv_metric}-mean"]))
+
+    def val_score(self, X, y):
+        assert self.val_storms is not None
+        assert isinstance(X.index, pd.MultiIndex)
+        assert isinstance(y.index, pd.MultiIndex)
+
+        if self.mlflow:
+            callbacks = [MLFlowXGBCallback(cv=False)]
+        else:
+            callbacks = None
+
+        kwargs = self.kwargs.copy()
+        early_stopping_rounds = int(kwargs.pop("early_stopping_rounds"))
+        # _ = kwargs.pop("num_boost_round")
+
+        dval = xgb.DMatrix(X.loc[self.val_storms], label=y.loc[self.val_storms])
+        dtrain = xgb.DMatrix(
+            X.drop(index=self.val_storms), label=y.drop(index=self.val_storms)
+        )
+
+        self.params["eval_metric"] = self.cv_metric
+        evals = [(dtrain, "train"), (dval, "val")]
+        evals_result = dict()
+        model = xgb.train(
+            params=self.params,
+            dtrain=dtrain,
+            evals=evals,
+            evals_result=evals_result,
+            early_stopping_rounds=early_stopping_rounds,
+            callbacks=callbacks,
+            **kwargs,
+        )
+
+        best_score = float(min(evals_result["val"][self.cv_metric]))
+
+        return best_score
 
     def predict(self, X):
         # Check fit was called successfully

@@ -76,8 +76,18 @@ def update_tuned_hyperparams(cfg, features_cfg):
             # Update kwargs
             if kwargs is not None:
                 best_kwargs = best_params[kwargs].iloc[0].to_dict()
+                if (
+                    cfg.model == "xgboost"
+                    and "metrics.best_iteration" in best_run.columns
+                ):
+                    best_kwargs["num_boost_round"] = int(
+                        best_run["metrics.best_iteration"]
+                    )
+
                 OmegaConf.update(cfg, "kwargs", best_kwargs, merge=True)
-                kwargs_str = ", ".join(["=".join(x) for x in best_kwargs.items()])
+                kwargs_str = ", ".join(
+                    ["=".join([kwarg, str(val)]) for kwarg, val in best_kwargs.items()]
+                )
                 logger.info(f"Updated kwargs: {kwargs_str}")
 
             if tune_cfg.lags:

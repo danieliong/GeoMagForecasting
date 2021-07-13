@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class HydraModel(ABC):
-    def __init__(self, cfg, metrics="rmse", cv=None, mlflow=False):
+    def __init__(self, cfg, metrics="rmse", cv=None, val_storms=None, mlflow=False):
         # cfg is from entire yaml file for a specific model (e.g. xgboost.yaml)
 
         # Required
@@ -49,6 +49,7 @@ class HydraModel(ABC):
         self.mlflow = mlflow
         # Initiate model
         self.cv = cv
+        self.val_storms = val_storms
         self.model = None
         self.python_model = None
 
@@ -111,6 +112,9 @@ class HydraModel(ABC):
         pass
 
     def cv_score(self, X, y):
+        pass
+
+    def val_score(self, X, y):
         pass
 
     # TODO: Implement general CV

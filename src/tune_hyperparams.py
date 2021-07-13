@@ -42,6 +42,7 @@ def tune_hyperparams(cfg):
     # Model specific parameters
     model_name = cfg.model
     metrics = cfg.metrics
+    val_storms = cfg.val_storms
     # seed = cfg.seed
 
     # Compute lagged features if they haven't been computed yet
@@ -58,15 +59,23 @@ def tune_hyperparams(cfg):
     X_train = load_processed_data("X_train", inputs_dir=inputs_dir, paths=paths)
     y_train = load_processed_data("y_train", inputs_dir=inputs_dir, paths=paths)
 
-    logger.info(f"Getting CV split for '{cv_method}' method...")
-    cv = get_cv_split(y_train, cv_method, **cv_init_params)
+    if val_storms is not None:
+        model = get_model(model_name)(
+            cfg, val_storms=val_storms, metrics=metrics, mlflow=use_mlflow
+        )
 
-    model = get_model(model_name)(cfg, cv=cv, metrics=metrics, mlflow=use_mlflow)
+        score = model.val_score(X_train, y_train)
+        if use_mlflow:
+            mlflow.log_metric(model.cv_metric, score)
+    else:
+        logger.info(f"Getting CV split for '{cv_method}' method...")
+        cv = get_cv_split(y_train, cv_method, **cv_init_params)
+        model = get_model(model_name)(cfg, cv=cv, metrics=metrics, mlflow=use_mlflow)
 
-    cv_score = model.cv_score(X_train, y_train)
-    logger.info(f"CV score: {cv_score}")
-    if use_mlflow:
-        mlflow.log_metric(model.cv_metric, cv_score)
+        score = model.cv_score(X_train, y_train)
+        logger.info(f"CV score: {score}")
+        if use_mlflow:
+            mlflow.log_metric(model.cv_metric, score)
 
     mlflow.log_params(model.params)
 
@@ -76,7 +85,7 @@ def tune_hyperparams(cfg):
     if use_mlflow:
         mlflow.end_run()
 
-    return cv_score
+    return score
 
 
 if __name__ == "__main__":
