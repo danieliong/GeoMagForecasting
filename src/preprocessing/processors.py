@@ -482,6 +482,10 @@ class FeaturesAdder(BaseEstimator, TransformerMixin):
                 feat in X_.columns for feat in ["bx", "by", "bz", "vx"]
             ):
                 X_[new_feat] = X_.eval("(bx**2 + by**2 + bz**2) * vx")
+            elif new_feat == "dyn_pressure" and all(
+                feat in X_.columns for feat in ["vx", "density"]
+            ):
+                X_[new_feat] = X_.eval("density * (vx**2)")
 
         return X_
 

@@ -84,6 +84,8 @@ def update_tuned_hyperparams(cfg, features_cfg):
                         best_run["metrics.best_iteration"]
                     )
 
+                # TODO: Check if it gets the correct num boost rounds when using CV
+
                 OmegaConf.update(cfg, "kwargs", best_kwargs, merge=True)
                 kwargs_str = ", ".join(
                     ["=".join([kwarg, str(val)]) for kwarg, val in best_kwargs.items()]
