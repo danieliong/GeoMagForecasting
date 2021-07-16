@@ -51,6 +51,7 @@ def _generate_data_ace_cdaweb(
                 df.where(df <= meta["VALIDMAX"], inplace=True)
 
                 df = df.resample(freq).mean()
+                # df = df.resample(freq, label="right").mean()
 
             # Resample to 1-minute resolution
             # yield df.resample("T").mean()
@@ -152,8 +153,11 @@ def load_features_ace_cdaweb(
 )
 @click.option("--swepam-path", default=None, help="Path to output SWEPAM data.")
 @click.option("--mag-path", default=None, help="Path to output MAG data.")
-@click.option("--freq", default="5T", help="Frequency to resample data to.")
-def save_data_storm(
+@click.option(
+    "--swepam-freq", default="5T", help="Frequency to resample SWEPAM data to."
+)
+@click.option("--mag-freq", default="5T", help="Frequency to resample MAG data to.")
+def main(
     stormtimes,
     output_path,
     swepam=True,
@@ -162,8 +166,12 @@ def save_data_storm(
     mag_dir="data/ace_cdaweb/mag",
     swepam_path=None,
     mag_path=None,
-    freq="5T",
+    swepam_freq="5T",
+    mag_freq="5T",
 ):
+
+    swepam_freq = None if swepam_freq == "None" else swepam_freq
+    mag_freq = None if mag_freq == "None" else mag_freq
 
     print(f"Reading storms from {stormtimes}")
 
@@ -176,7 +184,7 @@ def save_data_storm(
             stormtimes_path=stormtimes,
             str_format=SWEPAM_STR_FMT,
             data_keys=SWEPAM_DATA_KEYS,
-            freq=freq,
+            freq=swepam_freq,
         )
         data_list.append(swepam_data)
         if swepam_path is not None:
@@ -190,7 +198,7 @@ def save_data_storm(
             stormtimes_path=stormtimes,
             str_format=MAG_STR_FMT,
             data_keys=MAG_DATA_KEYS,
-            freq=freq,
+            freq=mag_freq,
         )
         data_list.append(mag_data)
         if mag_path is not None:
@@ -206,26 +214,4 @@ def save_data_storm(
 
 
 if __name__ == "__main__":
-    save_data_storm()
-
-    # # TODO: Create CLI
-    # stormtimes_path = "data/stormtimes_combined.csv"
-    # freq = "5T"
-
-    # data_path = "data/ace_cdaweb_combined.pkl"
-    # mag_path = "data/ace_cdaweb_combined_mag.pkl"
-    # swepam_path = "data/ace_cdaweb_combined_swepam.pkl"
-
-    # # save_data_storm("data/stormtimes_siciliano.csv", "data/ace_cdaweb_siciliano.pkl")
-    # # save_data_storm("data/stormtimes.csv", "data/ace_cdaweb_orig_storms.pkl")
-    # save_data_storm(
-    #     stormtimes_path,
-    #     swepam_save_path=swepam_path,
-    #     mag_save_path=mag_path,
-    #     save_path=data_path,
-    # )
-
-    # save_data_storm(
-    #     stormtimes="data/stormtimes_siciliano.csv",
-    #     output_path="data/ace_cdaweb_siciliano.pkl",
-    # )
+    main()
