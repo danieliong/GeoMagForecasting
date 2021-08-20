@@ -106,7 +106,7 @@ class HydraXGB(HydraModel):
 
         return self
 
-    def cv_score(self, X, y):
+    def cv_score(self, X, y, fit_model=False):
         # assert self.cv is not None, "cv must be specified."
         assert self.cv is not None or hasattr(self, "cv_res_")
 
@@ -114,12 +114,17 @@ class HydraXGB(HydraModel):
             dtrain = xgb.DMatrix(X, label=y)
             self.cv_res_ = self.cross_validate(dtrain)
 
+        opt_num_trees = self.get_optimal_num_trees()
+
         # Log params when tuning hyperparams b/c autolog only logs these when
         # using train
         if self.mlflow:
             mlflow.log_params(self.params)
-            opt_num_trees = self.get_optimal_num_trees()
             mlflow.log_param("num_boost_round", opt_num_trees)
+
+        if fit_model:
+            self.kwargs["num_boost_round"] = opt_num_trees
+            self.fit(X, y)
 
         return float(min(self.cv_res_[f"test-{self.cv_metric}-mean"]))
 

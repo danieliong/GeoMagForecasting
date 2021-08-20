@@ -35,6 +35,8 @@ experiment_id: "3"
 tags:
   tune: true
 
+fit_model: False
+
 hydra:
   verbose: false
   sweep:

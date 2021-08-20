@@ -39,6 +39,8 @@ def tune_hyperparams(cfg):
     cv_method = cfg.cv.method
     cv_init_params = cfg.cv.params
 
+    fit_model = cfg.fit_model
+
     # Model specific parameters
     model_name = cfg.model
     metrics = cfg.metrics
@@ -72,7 +74,7 @@ def tune_hyperparams(cfg):
         cv = get_cv_split(y_train, cv_method, **cv_init_params)
         model = get_model(model_name)(cfg, cv=cv, metrics=metrics, mlflow=use_mlflow)
 
-        score = model.cv_score(X_train, y_train)
+        score = model.cv_score(X_train, y_train, fit_model=fit_model)
         logger.info(f"CV score: {score}")
         if use_mlflow:
             mlflow.log_metric(model.cv_metric, score)
